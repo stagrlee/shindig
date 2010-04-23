@@ -18,20 +18,30 @@
  */
 package org.apache.shindig.auth;
 
+import org.apache.shindig.config.ContainerConfig;
+
 /**
  * A special class of Token representing the anonymous viewer/owner
  *
- * All methods except for isAnonymous will throw IllegalArgumentExceptions
  */
 public class AnonymousSecurityToken implements SecurityToken {
 
-  private String container;
+  private final String container;
+  private final long moduleId;
+  private final String appUrl;
 
   public AnonymousSecurityToken() {
-    this.container = "default";
+    this(ContainerConfig.DEFAULT_CONTAINER);
   }
+  
   public AnonymousSecurityToken(String container) {
+    this(container, 0L, "");
+  }
+
+  public AnonymousSecurityToken(String container, long moduleId, String appUrl) {
     this.container = container;
+    this.moduleId = moduleId;
+    this.appUrl = appUrl;
   }
 
   public boolean isAnonymous() {
@@ -43,19 +53,19 @@ public class AnonymousSecurityToken implements SecurityToken {
   }
 
   public String getOwnerId() {
-    return "";
+    return "-1";
   }
 
   public String getViewerId() {
-    return "";
+    return "-1";
   }
 
   public String getAppId() {
-    return "";
+    return appUrl;
   }
 
   public String getDomain() {
-    return "";
+    return "none";
   }
 
   public String getContainer() {
@@ -63,11 +73,11 @@ public class AnonymousSecurityToken implements SecurityToken {
   }
 
   public String getAppUrl() {
-    return "";
+    return appUrl;
   }
 
   public long getModuleId() {
-    return 0L;
+    return moduleId;
   }
 
   public String getUpdatedToken() {
