@@ -12,9 +12,10 @@
   Documentation
   -------------
 
-  The most up-to-date documentation can be found at http://incubator.apache.org/shindig/
-  and at http://incubator.apache.org/shindig/developers/php/index.html 
-  for specific PHP documentation.
+  The most up-to-date documentation can be found at
+  http://incubator.apache.org/shindig/ and at
+  http://incubator.apache.org/shindig/developers/php/index.html for specific
+  PHP documentation.
 
   Read javascript/README for instructions for using the Shindig Gadget 
   Container JavaScript to enable your page to render Gadgets.
@@ -22,7 +23,8 @@
   Release Notes
   -------------
 
-  The full list of changes can be found at https://issues.apache.org/jira/browse/SHINDIG.
+  The full list of changes can be found at
+  https://issues.apache.org/jira/browse/SHINDIG.
 
   System Requirements
   -------------------
@@ -84,7 +86,7 @@
   -------------
   
   Check out the php/config/container.php file, in local.php you only have 
-  to specificy the fields you want to overwrite with other values, for 
+  to specify the fields you want to overwrite with other values, for 
   example on a production system you would probably want to have something
   like:
    $shindigConfig = array(
@@ -107,9 +109,9 @@
   Running from an svn checkout
   ---------
 
-  If you want to run PHP Shindig directly from an svn checkout, please refer to the
-  docs/README.svn file to learn about the configuration differences between the released
-  and svn version. 
+  If you want to run PHP Shindig directly from an svn checkout, please refer to
+  the docs/README.svn file to learn about the configuration differences between
+  the released and svn version. 
 
   Licensing
   ---------
