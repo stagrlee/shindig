@@ -32,13 +32,13 @@ import javax.crypto.spec.SecretKeySpec;
 /**
  * Cryptographic utility functions.
  */
-public class Crypto {
+public final class Crypto {
   
   /** 
    * Use this random number generator instead of creating your own.  This is
    * thread-safe.
    */
-  public static final SecureRandom rand = new SecureRandom();
+  public static final SecureRandom RAND = new SecureRandom();
   
   /**
    * HMAC algorithm to use
@@ -104,7 +104,7 @@ public class Crypto {
    */
   public static byte[] getRandomBytes(int numBytes) {
     byte[] out = new byte[numBytes];
-    rand.nextBytes(out);
+    RAND.nextBytes(out);
     return out;
   }
   

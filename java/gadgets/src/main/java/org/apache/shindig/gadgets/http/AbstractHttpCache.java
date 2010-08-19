@@ -17,15 +17,11 @@
  */
 package org.apache.shindig.gadgets.http;
 
-import static org.apache.shindig.gadgets.rewrite.image.BasicImageRewriter.PARAM_RESIZE_HEIGHT;
-import static org.apache.shindig.gadgets.rewrite.image.BasicImageRewriter.PARAM_RESIZE_QUALITY;
-import static org.apache.shindig.gadgets.rewrite.image.BasicImageRewriter.PARAM_RESIZE_WIDTH;
-
-import com.google.inject.Inject;
-
+import com.google.common.base.Objects;
+import com.google.common.base.Preconditions;
 import org.apache.shindig.auth.SecurityToken;
-import org.apache.shindig.common.util.TimeSource;
 import org.apache.shindig.gadgets.AuthType;
+import org.apache.shindig.gadgets.uri.UriCommon;
 
 /**
  * Base class for content caches. Defines cache expiration rules and
@@ -37,15 +33,9 @@ import org.apache.shindig.gadgets.AuthType;
  * of building your own keys from scratch.
  */
 public abstract class AbstractHttpCache implements HttpCache {
-  private TimeSource clock = new TimeSource();
-
-  /**
-   * Subclasses should call this directly or be injected themselves to override.
-   */
-  @Inject
-  public void setClock(TimeSource clock) {
-    this.clock = clock;
-  }
+  private static final String RESIZE_HEIGHT = UriCommon.Param.RESIZE_HEIGHT.getKey();
+  private static final String RESIZE_WIDTH = UriCommon.Param.RESIZE_WIDTH.getKey();
+  private static final String RESIZE_QUALITY = UriCommon.Param.RESIZE_QUALITY.getKey();
 
   // Implement these methods to create a concrete HttpCache class.
   protected abstract HttpResponse getResponseImpl(String key);
@@ -108,6 +98,11 @@ public abstract class AbstractHttpCache implements HttpCache {
       // Caching was forced. Ignore what the response wants.
       return true;
     }
+    
+    if (response.getHttpStatusCode() == HttpResponse.SC_NOT_MODIFIED) {
+      // Shindig server will serve 304s. Do not cache 304s from the origin server.
+      return false;
+    }
 
     // If the HTTP response allows for it, we can cache.
     return !response.isStrictNoCache();
@@ -152,9 +147,9 @@ public abstract class AbstractHttpCache implements HttpCache {
         .setLegacyParam(6, getInstanceId(request))
         .setLegacyParam(7, getServiceName(request))
         .setLegacyParam(8, getTokenName(request))
-        .setParam("rh", request.getParam(PARAM_RESIZE_HEIGHT))
-        .setParam("rw", request.getParam(PARAM_RESIZE_WIDTH))
-        .setParam("rq", request.getParam(PARAM_RESIZE_QUALITY));
+        .setParam("rh", request.getParam(RESIZE_HEIGHT))
+        .setParam("rw", request.getParam(RESIZE_WIDTH))
+        .setParam("rq", request.getParam(RESIZE_QUALITY));
 
     return keyBuilder.build();
   }
@@ -162,10 +157,9 @@ public abstract class AbstractHttpCache implements HttpCache {
   protected static String getOwnerId(HttpRequest request) {
     if (request.getAuthType() != AuthType.NONE &&
         request.getOAuthArguments().getSignOwner()) {
-      if (request.getSecurityToken() == null)
-        throw new IllegalArgumentException("No Security Token set for request");
+      Preconditions.checkState(request.getSecurityToken() != null, "No Security Token set for request");
       String ownerId = request.getSecurityToken().getOwnerId();
-      return ownerId == null ? "" : ownerId;
+      return Objects.firstNonNull(ownerId, "");
     }
     // Requests that don't use authentication can share the result.
     return null;
@@ -174,10 +168,9 @@ public abstract class AbstractHttpCache implements HttpCache {
   protected static String getViewerId(HttpRequest request) {
     if (request.getAuthType() != AuthType.NONE &&
         request.getOAuthArguments().getSignViewer()) {
-      if (request.getSecurityToken() == null)
-        throw new IllegalArgumentException("No Security Token set for request");
+      Preconditions.checkState(request.getSecurityToken() != null, "No Security Token set for request");
       String viewerId = request.getSecurityToken().getViewerId();
-      return viewerId == null ? "" : viewerId;
+      return Objects.firstNonNull(viewerId, "");
     }
     // Requests that don't use authentication can share the result.
     return null;

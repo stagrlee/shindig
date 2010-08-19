@@ -133,10 +133,9 @@ public class ContentRewriterFeature {
         @Named("shindig.content-rewrite.exclude-urls")String excludeUrls,
         @Named("shindig.content-rewrite.expires")String expires,
         @Named("shindig.content-rewrite.include-tags")String includeTags,
-        @Named("shindig.content-rewrite.only-allow-excludes")String onlyAllowExcludes,
-        @Named("shindig.content-rewrite.enable-split-js-concat")String enableSplitJsConcat) {
-      super(includeUrls, excludeUrls, expires, includeTags,
-          Boolean.parseBoolean(onlyAllowExcludes), Boolean.parseBoolean(enableSplitJsConcat));
+        @Named("shindig.content-rewrite.only-allow-excludes")boolean onlyAllowExcludes,
+        @Named("shindig.content-rewrite.enable-split-js-concat")boolean enableSplitJsConcat) {
+      super(includeUrls, excludeUrls, expires, includeTags, onlyAllowExcludes, enableSplitJsConcat);
     }
   }
   
@@ -155,7 +154,8 @@ public class ContentRewriterFeature {
     
     // Lazily computed
     private Integer fingerprint;
-    
+    private static final Pattern COMMA_WHITESPACE_PATTERN = Pattern.compile("\\s*,\\s*");
+
     /**
      * Constructor which takes a gadget spec and container settings
      * as "raw" input strings.
@@ -180,7 +180,7 @@ public class ContentRewriterFeature {
 
       // Parse includeTags
       ImmutableSet.Builder<String> includeTagsBuilder = ImmutableSet.builder();
-      for (String s : paramTrim(defaultTags).toLowerCase().split("\\s*,\\s*")) {
+      for (String s : COMMA_WHITESPACE_PATTERN.split(paramTrim(defaultTags).toLowerCase())) {
         if (s != null && s.length() > 0) {
           includeTagsBuilder.add(s);
         }
@@ -340,7 +340,7 @@ public class ContentRewriterFeature {
         // "*" is handled by ALL
         String urllc = url.toLowerCase();
         for (String substr : bundle.matches) {
-          if (urllc.indexOf(substr) >= 0)
+          if (urllc.contains(substr))
             return true;
         }
         return false;

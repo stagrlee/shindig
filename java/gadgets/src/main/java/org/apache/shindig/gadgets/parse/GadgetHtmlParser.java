@@ -17,8 +17,6 @@
  */
 package org.apache.shindig.gadgets.parse;
 
-import com.google.common.collect.BiMap;
-import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.Lists;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
@@ -34,6 +32,7 @@ import org.w3c.dom.DOMException;
 import org.w3c.dom.DOMImplementation;
 import org.w3c.dom.Document;
 import org.w3c.dom.DocumentFragment;
+import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
@@ -53,18 +52,6 @@ public abstract class GadgetHtmlParser {
   private Provider<HtmlSerializer> serializerProvider = new DefaultSerializerProvider();
   protected final DOMImplementation documentFactory;
 
-  /**
-   * Allowed tag names for OpenSocial Data and template blocks.
-   */
-  public static final String OSML_DATA_TAG = "OSData";
-  public static final String OSML_TEMPLATE_TAG = "OSTemplate";
-
-  /**
-   * Bi-map of OpenSocial tags to their script type attribute values.
-   */
-  public static final BiMap<String, String> SCRIPT_TYPE_TO_OSML_TAG = ImmutableBiMap.of(
-      "text/os-data", OSML_DATA_TAG, "text/os-template", OSML_TEMPLATE_TAG);
-  
   protected GadgetHtmlParser(DOMImplementation documentFactory) {
     this.documentFactory = documentFactory;
   }
@@ -96,31 +83,32 @@ public abstract class GadgetHtmlParser {
     boolean shouldCache = shouldCache();
     if (shouldCache) {
       // TODO - Consider using the source if its under a certain size
-      key = HashUtil.rawChecksum(source.getBytes());
+      key = HashUtil.checksum(source.getBytes());
       document = documentCache.getElement(key);
     }
-    
+
     if (document == null) {
       try {
         document = parseDomImpl(source);
-      } catch (GadgetException e) {
-        throw e;
       } catch (DOMException e) {
         // DOMException is a RuntimeException
         document = errorDom(e);
-        HtmlSerialization.attach(document, serializerProvider.get(), source);      
+        HtmlSerialization.attach(document, serializerProvider.get(), source);
         return document;
+      } catch (NullPointerException e) {
+        throw new GadgetException(GadgetException.Code.INTERNAL_SERVER_ERROR,
+                                  "Caught exception in parseDomImpl", e);
       }
 
       HtmlSerialization.attach(document, serializerProvider.get(), source);
 
       Node html = document.getDocumentElement();
-      
+
       Node head = null;
       Node body = null;
       LinkedList<Node> beforeHead = Lists.newLinkedList();
       LinkedList<Node> beforeBody = Lists.newLinkedList();
-      
+
       while (html.hasChildNodes()) {
         Node child = html.removeChild(html.getFirstChild());
         if (child.getNodeType() == Node.ELEMENT_NODE &&
@@ -148,14 +136,14 @@ public abstract class GadgetHtmlParser {
           body.appendChild(child);
         }
       }
-      
+
       // Ensure head tag exists
       if (head == null) {
         // beforeHead contains all elements that should be prepended to <body>. Switch them.
         LinkedList<Node> temp = beforeBody;
         beforeBody = beforeHead;
         beforeHead = temp;
-        
+
         // Add as first element
         head = document.createElement("head");
         html.insertBefore(head, html.getFirstChild());
@@ -163,7 +151,7 @@ public abstract class GadgetHtmlParser {
         // Re-append head node.
         html.appendChild(head);
       }
-      
+
       // Ensure body tag exists.
       if (body == null) {
         // Add immediately after head.
@@ -173,38 +161,38 @@ public abstract class GadgetHtmlParser {
         // Re-append body node.
         html.appendChild(body);
       }
-      
+
       // Leftovers: nodes before the first <head> node found and the first <body> node found.
       // Prepend beforeHead to the front of <head>, and beforeBody to beginning of <body>,
       // in the order they were found in the document.
       prependToNode(head, beforeHead);
       prependToNode(body, beforeBody);
-      
-      // One exception. <style> nodes from <body> end up at the end of <head>, since doing so
-      // is HTML compliant and can never break rendering due to ordering concerns.
+
+      // One exception. <style>/<link rel="stylesheet" nodes from <body> end up at the end of <head>,
+      // since doing so is HTML compliant and can never break rendering due to ordering concerns.
       LinkedList<Node> styleNodes = Lists.newLinkedList();
       NodeList bodyKids = body.getChildNodes();
       for (int i = 0; i < bodyKids.getLength(); ++i) {
         Node bodyKid = bodyKids.item(i);
         if (bodyKid.getNodeType() == Node.ELEMENT_NODE &&
-            "style".equalsIgnoreCase(bodyKid.getNodeName())) {
+            isStyleElement((Element)bodyKid)) {
           styleNodes.add(bodyKid);
         }
       }
-      
+
       for (Node styleNode : styleNodes) {
         head.appendChild(body.removeChild(styleNode));
       }
-      
+
       // Finally, reprocess all script nodes for OpenSocial purposes, as these
       // may be interpreted (rightly, from the perspective of HTML) as containing text only.
       reprocessScriptForOpenSocial(html);
-      
+
       if (shouldCache) {
         documentCache.addElement(key, document);
       }
     }
-    
+
     if (shouldCache) {
       Document copy = (Document)document.cloneNode(true);
       HtmlSerialization.copySerializer(document, copy);
@@ -212,39 +200,46 @@ public abstract class GadgetHtmlParser {
     }
     return document;
   }
-  
+
   protected void transferChildren(Node to, Node from) {
     while (from.hasChildNodes()) {
       to.appendChild(from.removeChild(from.getFirstChild()));
     }
   }
-  
+
   protected void prependToNode(Node to, LinkedList<Node> from) {
     while (!from.isEmpty()) {
       to.insertBefore(from.removeLast(), to.getFirstChild());
     }
   }
 
+  private boolean isStyleElement(Element elem) {
+    return "style".equalsIgnoreCase(elem.getNodeName()) ||
+           ("link".equalsIgnoreCase(elem.getNodeName()) &&
+            ("stylesheet".equalsIgnoreCase(elem.getAttribute("rel")) ||
+             elem.getAttribute("type").toLowerCase().contains("css")));
+  }
+
   /**
-   * Parses a snippet of markup and appends the result as children to the 
+   * Parses a snippet of markup and appends the result as children to the
    * provided node.
-   * 
+   *
    * @param source markup to be parsed
    * @param result Node to append results to
    * @throws GadgetException
    */
   public void parseFragment(String source, Node result) throws GadgetException {
     boolean shouldCache = shouldCache();
-    String key = null;    
+    String key = null;
     if (shouldCache) {
-      key = HashUtil.rawChecksum(source.getBytes());
+      key = HashUtil.checksum(source.getBytes());
       DocumentFragment cachedFragment = fragmentCache.getElement(key);
       if (cachedFragment != null) {
         copyFragment(cachedFragment, result);
         return;
       }
     }
-    
+
     DocumentFragment fragment = null;
     try {
       fragment = parseFragmentImpl(source);
@@ -253,7 +248,7 @@ public abstract class GadgetHtmlParser {
       appendParseException(result, e);
       return;
     }
-    
+
     reprocessScriptForOpenSocial(fragment);
     if (shouldCache) {
       fragmentCache.addElement(key, fragment);
@@ -267,9 +262,9 @@ public abstract class GadgetHtmlParser {
     for (int i = 0; i < nodes.getLength(); i++) {
       Node clone = destDoc.importNode(nodes.item(i), true);
       dest.appendChild(clone);
-    }    
+    }
   }
-  
+
   protected Document errorDom(DOMException e) {
     // Create a bare-bones DOM whose body is just error text.
     // We do this to echo information to the developer that originally
@@ -285,16 +280,16 @@ public abstract class GadgetHtmlParser {
     doc.appendChild(html);
     return doc;
   }
-  
+
   private void appendParseException(Node node, DOMException e) {
     node.appendChild(node.getOwnerDocument().createTextNode(
         GadgetException.Code.HTML_PARSE_ERROR.toString() + ": " + e.toString()));
   }
-  
+
   protected boolean shouldCache() {
     return documentCache != null && documentCache.getCapacity() != 0;
   }
-  
+
   private void reprocessScriptForOpenSocial(Node root) throws GadgetException {
     LinkedList<Node> nodeQueue = Lists.newLinkedList();
     nodeQueue.add(root);
@@ -303,7 +298,8 @@ public abstract class GadgetHtmlParser {
       if (next.getNodeType() == Node.ELEMENT_NODE &&
           "script".equalsIgnoreCase(next.getNodeName())) {
         Attr typeAttr = (Attr)next.getAttributes().getNamedItem("type");
-        if (typeAttr != null && SCRIPT_TYPE_TO_OSML_TAG.get(typeAttr.getValue()) != null) {
+        if (typeAttr != null &&
+            SocialDataTags.SCRIPT_TYPE_TO_OSML_TAG.get(typeAttr.getValue()) != null) {
           // The underlying parser impl may have already parsed these.
           // Only re-parse with the coalesced text children if that's all there are.
           boolean parseOs = true;
@@ -332,7 +328,7 @@ public abstract class GadgetHtmlParser {
           }
         }
       }
-      
+
       // Enqueue children for inspection.
       NodeList children = next.getChildNodes();
       for (int i = 0; i < children.getLength(); ++i) {
@@ -340,7 +336,7 @@ public abstract class GadgetHtmlParser {
       }
     }
   }
-  
+
   /**
    * TODO: remove the need for parseDomImpl as a parsing method. Gadget HTML is
    * tag soup handled in custom fashion, or is a legitimate fragment. In either case,
@@ -357,7 +353,7 @@ public abstract class GadgetHtmlParser {
    * @return a DocumentFragment containing the parsed elements
    * @throws GadgetException
    */
-  protected abstract DocumentFragment parseFragmentImpl(String source) 
+  protected abstract DocumentFragment parseFragmentImpl(String source)
       throws GadgetException;
 
   private static class DefaultSerializerProvider implements Provider<HtmlSerializer> {

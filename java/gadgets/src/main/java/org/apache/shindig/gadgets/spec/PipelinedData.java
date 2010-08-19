@@ -21,7 +21,6 @@ import org.apache.shindig.common.uri.Uri;
 import org.apache.shindig.common.xml.XmlException;
 import org.apache.shindig.expressions.Expressions;
 import org.apache.shindig.gadgets.AuthType;
-import org.apache.shindig.gadgets.GadgetELResolver;
 import org.apache.shindig.gadgets.variables.Substitutions;
 
 import java.util.Collections;
@@ -165,7 +164,7 @@ public class PipelinedData {
    *
    * @param rootObjects an ELResolver that can evaluate currently available
    *     root objects.
-   * @see GadgetELResolver
+   * @see org.apache.shindig.gadgets.GadgetELResolver
    * @return a batch, or null if no batch could be created
    */
   public Batch getBatch(Expressions expressions, ELResolver rootObjects) {
@@ -315,9 +314,11 @@ public class PipelinedData {
     // TODO: SHINDIG-711 should be activityIds?
     copyAttribute("activityId", child, expression, JSONArray.class);
     copyAttribute("fields", child, expression, JSONArray.class);
+    copyAttribute("startIndex", child, expression, Integer.class);
+    copyAttribute("count", child, expression, Integer.class);
 
     // TODO: add activity paging support
-
+    
     return expression;
   }
 

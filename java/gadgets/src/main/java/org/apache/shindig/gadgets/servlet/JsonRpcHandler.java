@@ -20,15 +20,17 @@ package org.apache.shindig.gadgets.servlet;
 
 import org.apache.shindig.gadgets.Gadget;
 import org.apache.shindig.gadgets.GadgetContext;
-import org.apache.shindig.gadgets.UrlGenerator;
 import org.apache.shindig.gadgets.process.Processor;
 import org.apache.shindig.gadgets.spec.GadgetSpec;
 import org.apache.shindig.gadgets.spec.LinkSpec;
 import org.apache.shindig.gadgets.spec.ModulePrefs;
 import org.apache.shindig.gadgets.spec.UserPref;
 import org.apache.shindig.gadgets.spec.View;
+import org.apache.shindig.gadgets.spec.Feature;
+import org.apache.shindig.gadgets.uri.IframeUriManager;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
 import com.google.inject.Inject;
 
 import org.json.JSONArray;
@@ -51,13 +53,13 @@ import java.util.concurrent.ExecutorService;
 public class JsonRpcHandler {
   protected final ExecutorService executor;
   protected final Processor processor;
-  protected final UrlGenerator urlGenerator;
+  protected final IframeUriManager iframeUriManager;
 
   @Inject
-  public JsonRpcHandler(ExecutorService executor, Processor processor, UrlGenerator urlGenerator) {
+  public JsonRpcHandler(ExecutorService executor, Processor processor, IframeUriManager iframeUriManager) {
     this.executor = executor;
     this.processor = processor;
-    this.urlGenerator = urlGenerator;
+    this.iframeUriManager = iframeUriManager;
   }
 
   /**
@@ -172,7 +174,23 @@ public class JsonRpcHandler {
         // Features.
         Set<String> feats = prefs.getFeatures().keySet();
         String[] features = feats.toArray(new String[feats.size()]);
-
+        
+        // Feature details
+        // The following renders an object containing feature details, of the form 
+        //   { <featureName>*: { "required": <boolean>, "parameters": { <paramName>*: <string> } } }
+        JSONObject featureDetailList = new JSONObject();
+        for (Feature featureSpec : prefs.getFeatures().values()) {
+          JSONObject featureDetail = new JSONObject();
+          featureDetail.put("required", featureSpec.getRequired());
+          JSONObject featureParameters = new JSONObject();
+          featureDetail.put("parameters", featureParameters);
+          Multimap<String, String> featureParams = featureSpec.getParams();
+          for (String paramName : featureParams.keySet()) {
+            featureParameters.put(paramName, featureParams.get(paramName));
+          }
+          featureDetailList.put(featureSpec.getName(), featureDetail);
+        }
+        
         // Links
         JSONObject links = new JSONObject();
         for (LinkSpec link : prefs.getLinks().values()) {
@@ -182,7 +200,7 @@ public class JsonRpcHandler {
         JSONObject userPrefs = new JSONObject();
 
         // User pref specs
-        for (UserPref pref : spec.getUserPrefs()) {
+        for (UserPref pref : spec.getUserPrefs().values()) {
           JSONObject up = new JSONObject()
               .put("displayName", pref.getDisplayName())
               .put("type", pref.getDataType().toString().toLowerCase())
@@ -195,13 +213,14 @@ public class JsonRpcHandler {
         // TODO: This should probably just copy all data from
         // ModulePrefs.getAttributes(), but names have to be converted to
         // camel case.
-        gadgetJson.put("iframeUrl", urlGenerator.getIframeUrl(gadget))
+        gadgetJson.put("iframeUrl", iframeUriManager.makeRenderingUri(gadget).toString())
                   .put("url",context.getUrl().toString())
                   .put("moduleId", context.getModuleId())
                   .put("title", prefs.getTitle())
                   .put("titleUrl", prefs.getTitleUrl().toString())
                   .put("views", views)
                   .put("features", features)
+                  .put("featureDetails", featureDetailList)
                   .put("userPrefs", userPrefs)
                   .put("links", links)
 

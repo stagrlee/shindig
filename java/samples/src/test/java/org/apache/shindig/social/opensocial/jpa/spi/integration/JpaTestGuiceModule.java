@@ -54,13 +54,11 @@ import org.apache.shindig.social.opensocial.oauth.OAuthEntry;
 import com.google.inject.AbstractModule;
 
 import net.oauth.OAuthConsumer;
-import net.oauth.OAuthProblemException;
 
 /**
  * Provides component injection for tests
  * Injects Social API and JPA persistence guice modules
  *
- * @author bens
  */
 public class JpaTestGuiceModule extends AbstractModule {
 
@@ -107,9 +105,6 @@ public class JpaTestGuiceModule extends AbstractModule {
       return null;
     }
 
-    public OAuthEntry generateRequestToken(String consumerKey) {
-      throw new UnsupportedOperationException();
-    }
 
     public OAuthEntry convertToAccessToken(OAuthEntry entry) {
       throw new UnsupportedOperationException();

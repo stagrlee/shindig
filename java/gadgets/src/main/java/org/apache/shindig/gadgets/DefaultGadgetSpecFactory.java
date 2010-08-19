@@ -28,7 +28,6 @@ import org.apache.shindig.common.uri.Uri;
 import org.apache.shindig.common.xml.XmlException;
 import org.apache.shindig.common.xml.XmlUtil;
 import org.apache.shindig.gadgets.http.RequestPipeline;
-import org.apache.shindig.gadgets.servlet.HtmlAccelServlet;
 import org.apache.shindig.gadgets.spec.GadgetSpec;
 import org.apache.shindig.gadgets.spec.SpecParserException;
 import org.w3c.dom.Element;
@@ -66,10 +65,6 @@ public class DefaultGadgetSpecFactory extends AbstractSpecFactory<GadgetSpec>
       try 
       {
         Uri uri = RAW_GADGET_URI;
-        // For accelerate page, pass in page url instead of fake one:
-        if (HtmlAccelServlet.isAccel(context)) {
-          uri = context.getUrl();
-        }
         return new GadgetSpec(uri, XmlUtil.parse(rawxml), rawxml);
       } catch (XmlException e) {
         throw new SpecParserException(e);
@@ -86,11 +81,12 @@ public class DefaultGadgetSpecFactory extends AbstractSpecFactory<GadgetSpec>
     return super.getSpec(query);
   }
 
+  private static final String BOM_ENTITY = "&#xFEFF;";
+
   @Override
   protected GadgetSpec parse(String content, Query query) throws XmlException, GadgetException {
     // Allow BOM entity as first item on stream and ignore it:
-    final String BOM_ENTITY = "&#xFEFF;";
-    if (content.length() >= BOM_ENTITY.length() && 
+    if (content.length() >= BOM_ENTITY.length() &&
         content.substring(0, BOM_ENTITY.length()).equalsIgnoreCase(BOM_ENTITY)) {
       content = content.substring(BOM_ENTITY.length());
     }

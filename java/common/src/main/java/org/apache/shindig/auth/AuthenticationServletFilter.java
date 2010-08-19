@@ -17,10 +17,11 @@
  */
 package org.apache.shindig.auth;
 
+import com.google.common.base.Charsets;
+import com.google.common.base.Preconditions;
 import com.google.inject.Inject;
 
 import org.apache.shindig.common.servlet.InjectedFilter;
-import org.apache.shindig.common.util.CharsetUtil;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -58,7 +59,7 @@ public class AuthenticationServletFilter extends InjectedFilter {
 
   private List<AuthenticationHandler> handlers;
 
-  private static final Logger logger = Logger.getLogger(
+  private static final Logger LOG = Logger.getLogger(
       AuthenticationServletFilter.class.getName());
 
   @Inject
@@ -97,7 +98,7 @@ public class AuthenticationServletFilter extends InjectedFilter {
       callChain(chain, req, resp);
     } catch (AuthenticationHandler.InvalidAuthenticationException iae) {
       Throwable cause = iae.getCause();
-      logger.log(Level.INFO, iae.getMessage(), cause);
+      LOG.log(Level.INFO, iae.getMessage(), cause);
 
       if (iae.getAdditionalHeaders() != null) {
         for (Map.Entry<String,String> entry : iae.getAdditionalHeaders().entrySet()) {
@@ -139,10 +140,8 @@ public class AuthenticationServletFilter extends InjectedFilter {
 
     @Override
     public ServletInputStream getInputStream() throws IOException {
-      if (reader != null) {
-        throw new IllegalStateException(
-            "The methods getInputStream() and getReader() are mutually exclusive.");
-      }
+      Preconditions.checkState(reader == null, "The methods getInputStream() and getReader() are mutually exclusive.");
+
       if (stream == null) {
         stream = new ServletInputStream() {
           public int read() throws IOException {
@@ -155,14 +154,12 @@ public class AuthenticationServletFilter extends InjectedFilter {
 
     @Override
     public BufferedReader getReader() throws IOException {
-      if (stream != null) {
-        throw new IllegalStateException(
-            "The methods getInputStream() and getReader() are mutually exclusive.");
-      }
+      Preconditions.checkState(stream == null, "The methods getInputStream() and getReader() are mutually exclusive.");
+
       if (reader == null) {
         Charset charset = Charset.forName(getCharacterEncoding());
         if (charset == null) {
-          charset =  CharsetUtil.UTF8;
+          charset =  Charsets.UTF_8;
         }
         reader = new BufferedReader(new InputStreamReader(rawStream, charset));
       }

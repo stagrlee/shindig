@@ -15,7 +15,6 @@
  * KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-var osapi = osapi || {};
 
 /**
  * A transport for osapi based on gadgets.rpc. Allows osapi to expose APIs requiring container
@@ -96,7 +95,10 @@ if (gadgets && gadgets.rpc) { //Dont bind if gadgets.rpc not defined
         osapi.container.listMethods({}).execute(function(response) {
           if (!response.error) {
             for (var i = 0; i < response.length; i++) {
-              osapi._registerMethod(response[i], transport);
+              // do not rebind container.listMethods implementation
+              if (response[i] != "container.listMethods") {
+                osapi._registerMethod(response[i], transport);
+              }
             }
           }
           // Notify completion
@@ -111,7 +113,7 @@ if (gadgets && gadgets.rpc) { //Dont bind if gadgets.rpc not defined
     }
 
     // Do not run this in container mode.
-    if (gadgets.config) {
+    if (gadgets.config && gadgets.config.isGadget) {
       gadgets.config.register("osapi.services", null, init);
     }
   })();

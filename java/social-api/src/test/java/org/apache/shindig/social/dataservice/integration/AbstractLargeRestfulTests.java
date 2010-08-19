@@ -21,6 +21,7 @@ import org.apache.shindig.auth.AuthInfo;
 import org.apache.shindig.common.EasyMockTestCase;
 import org.apache.shindig.common.testing.FakeGadgetToken;
 import org.apache.shindig.common.testing.FakeHttpServletRequest;
+import org.apache.shindig.config.ContainerConfig;
 import org.apache.shindig.protocol.DataServiceServlet;
 import org.apache.shindig.protocol.HandlerRegistry;
 import org.apache.shindig.protocol.conversion.BeanJsonConverter;
@@ -55,6 +56,7 @@ import javax.xml.stream.XMLStreamReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintWriter;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -94,8 +96,12 @@ public abstract class AbstractLargeRestfulTests extends EasyMockTestCase {
 
     HandlerRegistry dispatcher = injector.getInstance(HandlerRegistry.class);
     dispatcher.addHandlers(injector.getInstance(Key.get(new TypeLiteral<Set<Object>>(){},
-        Names.named("org.apache.shindig.social.handlers"))));
+        Names.named("org.apache.shindig.handlers"))));
     servlet.setHandlerRegistry(dispatcher);
+    ContainerConfig containerConfig = EasyMock.createMock(ContainerConfig.class);
+    EasyMock.expect(containerConfig.<String>getList(null, "gadgets.parentOrigins")).andReturn(Collections.<String>singletonList("*")).anyTimes();
+    EasyMock.replay(containerConfig);
+    servlet.setContainerConfig(containerConfig);
     servlet.setBeanConverters(new BeanJsonConverter(injector),
         new BeanXStreamConverter(new XStream081Configuration(injector)),
         new BeanXStreamAtomConverter(new XStream081Configuration(injector)));
@@ -151,6 +157,7 @@ public abstract class AbstractLargeRestfulTests extends EasyMockTestCase {
     EasyMock.expect(res.getWriter()).andReturn(writer);
     res.setCharacterEncoding("UTF-8");
     res.setContentType(contentType);
+    res.addHeader("Access-Control-Allow-Origin", "*");
 
     EasyMock.replay(res);
     servlet.service(req, res);

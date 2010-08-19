@@ -22,7 +22,7 @@
   <parent>
     <groupId>org.apache.shindig</groupId>
     <artifactId>shindig-project</artifactId>
-    <version>1.1-BETA6-SNAPSHOT</version>
+    <version>2.0.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
@@ -78,12 +78,6 @@
     </plugins>
     <resources>
       <resource>
-        <directory>${basedir}/../../content/</directory>
-        <includes>
-          <include>**/*.*</include>
-        </includes>
-      </resource>
-      <resource>
         <targetPath>containers/default</targetPath>
         <directory>${basedir}/../../config</directory>
         <includes>
@@ -127,6 +121,10 @@
       <groupId>org.apache.shindig</groupId>
       <artifactId>shindig-features</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.apache.shindig</groupId>
+      <artifactId>shindig-extras</artifactId>
+    </dependency>
 
     <!-- external dependencies -->
     <dependency>
@@ -134,12 +132,16 @@
       <artifactId>commons-io</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.google.collections</groupId>
-      <artifactId>google-collections</artifactId>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
     </dependency>
     <dependency>
       <groupId>com.google.inject</groupId>
       <artifactId>guice</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.google.inject.extensions</groupId>
+      <artifactId>guice-multibindings</artifactId>
     </dependency>
     <dependency>
       <groupId>xml-apis</groupId>
@@ -150,12 +152,16 @@
       <artifactId>json</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.jsecurity</groupId>
-      <artifactId>jsecurity</artifactId>
-    </dependency>
-    <dependency>
       <groupId>javax.servlet</groupId>
       <artifactId>jstl</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.shiro</groupId>
+      <artifactId>shiro-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-jdk14</artifactId>
     </dependency>
 
     <!-- test -->
@@ -170,8 +176,8 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>de.odysseus.juel</groupId>
-      <artifactId>juel-api</artifactId>
+      <groupId>org.apache.tomcat</groupId>
+      <artifactId>el-api</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

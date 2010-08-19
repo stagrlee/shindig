@@ -28,8 +28,8 @@ public interface CacheProvider {
    *
    * @param <K>  The Key type for the cache
    * @param <V>  The pay-load type
-   * @param name The name of the cache.
+   * @param name The non-null name of the cache.
    * @return A Cache configured to the required specification.
    */
-  public <K, V> Cache<K, V> createCache(String name);
+  <K, V> Cache<K, V> createCache(String name);
 }

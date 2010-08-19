@@ -22,13 +22,14 @@ import org.apache.shindig.common.PropertiesModule;
 import org.apache.shindig.expressions.RootELResolver;
 import org.apache.shindig.gadgets.Gadget;
 import org.apache.shindig.gadgets.GadgetException;
+import org.apache.shindig.gadgets.oauth.OAuthModule;
 import org.apache.shindig.gadgets.parse.DefaultHtmlSerializer;
 import org.apache.shindig.gadgets.parse.GadgetHtmlParser;
-import org.apache.shindig.gadgets.parse.ParseModule;
+import org.apache.shindig.gadgets.parse.SocialDataTags;
 import org.apache.shindig.gadgets.templates.TagRegistry;
 import org.apache.shindig.gadgets.templates.TemplateContext;
-import org.apache.shindig.gadgets.templates.TemplateModule;
 import org.apache.shindig.gadgets.templates.TemplateProcessor;
+import org.apache.shindig.gadgets.DefaultGuiceModule;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Guice;
@@ -60,8 +61,7 @@ public class TemplateBasedTagHandlerTest {
   
   @Before
   public void setUp() throws Exception {
-    Injector injector = Guice.createInjector(new ParseModule(), new TemplateModule(),
-        new PropertiesModule());
+    Injector injector = Guice.createInjector(new DefaultGuiceModule(), new OAuthModule(), new PropertiesModule());
     parser = injector.getInstance(GadgetHtmlParser.class);
     processor = injector.getInstance(TemplateProcessor.class);
     context = new TemplateContext(new Gadget(), null);
@@ -167,7 +167,7 @@ public class TemplateBasedTagHandlerTest {
     String content = "<script type=\"text/os-template\" xmlns:foo=\"" + TEST_NS + 
         "\" xmlns:os=\"" + TagHandler.OPENSOCIAL_NAMESPACE + "\">" + markup + "</script>";
     Document document = parser.parseDom(content);
-    return (Element) document.getElementsByTagName(GadgetHtmlParser.OSML_TEMPLATE_TAG).item(0);
+    return SocialDataTags.getTags(document, SocialDataTags.OSML_TEMPLATE_TAG).get(0);
   }
   
   private String serialize(Node node) throws IOException {

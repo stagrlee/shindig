@@ -23,7 +23,6 @@ import org.apache.shindig.common.util.HashUtil;
 import org.apache.shindig.common.xml.XmlUtil;
 import org.apache.shindig.gadgets.variables.Substitutions;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.MapMaker;
@@ -64,7 +63,7 @@ public class GadgetSpec {
     NodeList children = doc.getChildNodes();
 
     ModulePrefs modulePrefs = null;
-    List<UserPref> userPrefs = Lists.newLinkedList();
+    ImmutableMap.Builder<String,UserPref> prefsBuilder = ImmutableMap.builder();
     Map<String, List<Element>> views = Maps.newHashMap();
     for (int i = 0, j = children.getLength(); i < j; ++i) {
       Node child = children.item(i);
@@ -82,7 +81,7 @@ public class GadgetSpec {
       }
       if ("UserPref".equals(name)) {
         UserPref pref = new UserPref(element);
-        userPrefs.add(pref);
+        prefsBuilder.put(pref.getName(), pref);
       }
       if ("Content".equals(name)) {
         String viewNames = XmlUtil.getAttribute(element, "view", "default");
@@ -114,11 +113,7 @@ public class GadgetSpec {
       }
       this.views = ImmutableMap.copyOf(tmpViews);
     }
-    if (userPrefs.isEmpty()) {
-      this.userPrefs = Collections.emptyList();
-    } else {
-      this.userPrefs = ImmutableList.copyOf(userPrefs);
-    }
+    this.userPrefs = prefsBuilder.build();
   }
 
   /**
@@ -165,8 +160,8 @@ public class GadgetSpec {
   /**
    * UserPref
    */
-  private List<UserPref> userPrefs;
-  public List<UserPref> getUserPrefs() {
+  private Map<String,UserPref> userPrefs;
+  public Map<String,UserPref> getUserPrefs() {
     return userPrefs;
   }
 
@@ -222,13 +217,13 @@ public class GadgetSpec {
     spec.modulePrefs = modulePrefs.substitute(substituter);
 
     if (userPrefs.isEmpty()) {
-      spec.userPrefs = Collections.emptyList();
+      spec.userPrefs = ImmutableMap.of();
     } else {
-      List<UserPref> prefs = Lists.newArrayListWithCapacity(userPrefs.size());
-      for (UserPref pref : userPrefs) {
-        prefs.add(pref.substitute(substituter));
+      ImmutableMap.Builder<String,UserPref> prefs = ImmutableMap.builder();
+      for (UserPref pref : this.userPrefs.values()) {
+        prefs.put(pref.getName(), pref.substitute(substituter));
       }
-      spec.userPrefs = ImmutableList.copyOf(prefs);
+      spec.userPrefs = prefs.build();
     }
 
     ImmutableMap.Builder<String, View> viewMap = ImmutableMap.builder();
@@ -245,7 +240,7 @@ public class GadgetSpec {
     StringBuilder buf = new StringBuilder();
     buf.append("<Module>\n")
        .append(modulePrefs).append('\n');
-    for (UserPref pref : userPrefs) {
+    for (UserPref pref : userPrefs.values()) {
       buf.append(pref).append('\n');
     }
     for (Map.Entry<String, View> view : views.entrySet()) {

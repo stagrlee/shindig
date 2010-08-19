@@ -18,6 +18,7 @@
 package org.apache.shindig.protocol;
 
 import org.apache.shindig.auth.SecurityToken;
+import org.apache.shindig.common.servlet.HttpUtil;
 import org.apache.shindig.protocol.conversion.BeanConverter;
 
 import com.google.common.collect.ImmutableMap;
@@ -37,7 +38,7 @@ import java.util.logging.Logger;
 
 public class DataServiceServlet extends ApiServlet {
 
-  private static final Logger logger = Logger.getLogger(DataServiceServlet.class.getName());
+  private static final Logger LOG = Logger.getLogger(DataServiceServlet.class.getName());
 
   public static final Set<String> ALLOWED_CONTENT_TYPES =
       new ImmutableSet.Builder<String>().addAll(ContentTypes.ALLOWED_JSON_CONTENT_TYPES)
@@ -58,7 +59,7 @@ public class DataServiceServlet extends ApiServlet {
       HttpServletResponse servletResponse)
       throws ServletException, IOException {
     try {
-      checkContentTypes(ALLOWED_CONTENT_TYPES, servletRequest.getContentType());
+      ContentTypes.checkContentTypes(ALLOWED_CONTENT_TYPES, servletRequest.getContentType());
       executeRequest(servletRequest, servletResponse);
     } catch (ContentTypes.InvalidContentTypeException icte) {
       sendError(servletResponse,
@@ -78,7 +79,7 @@ public class DataServiceServlet extends ApiServlet {
       HttpServletResponse servletResponse)
       throws ServletException, IOException {
     try {
-      checkContentTypes(ALLOWED_CONTENT_TYPES, servletRequest.getContentType());
+      ContentTypes.checkContentTypes(ALLOWED_CONTENT_TYPES, servletRequest.getContentType());
       executeRequest(servletRequest, servletResponse);
     } catch (ContentTypes.InvalidContentTypeException icte) {
       sendError(servletResponse,
@@ -91,8 +92,8 @@ public class DataServiceServlet extends ApiServlet {
    */
   void executeRequest(HttpServletRequest servletRequest, HttpServletResponse servletResponse)
       throws IOException {
-    if (logger.isLoggable(Level.FINEST)) {
-      logger.finest("Handling restful request for " + servletRequest.getPathInfo());
+    if (LOG.isLoggable(Level.FINEST)) {
+      LOG.finest("Handling restful request for " + servletRequest.getPathInfo());
     }
 
     setCharacterEncodings(servletRequest, servletResponse);
@@ -102,6 +103,8 @@ public class DataServiceServlet extends ApiServlet {
       sendSecurityError(servletResponse);
       return;
     }
+
+    HttpUtil.setCORSheader(servletResponse, containerConfig.<String>getList(token.getContainer(), "gadgets.parentOrigins"));
 
     BeanConverter converter = getConverterForRequest(servletRequest);
 
@@ -169,7 +172,13 @@ public class DataServiceServlet extends ApiServlet {
         response = ImmutableMap.of("entry", response);
       }
 
+      // JSONP style callbacks
+      String callback =  (HttpUtil.isJSONP(servletRequest) && ContentTypes.OUTPUT_JSON_CONTENT_TYPE.equals(converter.getContentType())) ?
+          servletRequest.getParameter("callback") : null;
+
+      if (callback != null) writer.write(callback + '(');
       writer.write(converter.convertToString(response));
+      if (callback != null) writer.write(");\n");
     } else {
       sendError(servletResponse, responseItem);
     }
@@ -198,16 +207,16 @@ public class DataServiceServlet extends ApiServlet {
       formatString = servletRequest.getParameter(FORMAT_PARAM);
     } catch (Throwable t) {
       // this happens while testing
-      if (logger.isLoggable(Level.FINE)) {
-        logger.fine("Unexpected error : format param is null " + t.toString());
+      if (LOG.isLoggable(Level.FINE)) {
+        LOG.fine("Unexpected error : format param is null " + t.toString());
       }
     }
     try {
       contentType = servletRequest.getContentType();
     } catch (Throwable t) {
       //this happens while testing
-      if (logger.isLoggable(Level.FINE)) {
-        logger.fine("Unexpected error : content type is null " + t.toString());
+      if (LOG.isLoggable(Level.FINE)) {
+        LOG.fine("Unexpected error : content type is null " + t.toString());
       }
     }
 

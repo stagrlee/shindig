@@ -139,6 +139,9 @@ public interface ConcatUriManager {
 
     @Override
     public boolean equals(Object obj) {
+      if (obj == this) {
+        return true;
+      }
       if (!(obj instanceof ConcatUri)) {
         return false; 
       }
@@ -148,7 +151,12 @@ public interface ConcatUriManager {
           && Objects.equal(this.splitParam, objUri.splitParam)
           && Objects.equal(this.type, objUri.type));
     }
-    
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(super.hashCode(), batch, splitParam, type);
+    }
+
     public List<Uri> getBatch() {
       return batch;
     }
@@ -189,7 +197,7 @@ public interface ConcatUriManager {
     
     /**
      * Validate the version of the resource list.
-     * @param resourceUri Uri of a proxied resource
+     * @param resourceUris Uris of a proxied resource
      * @param container Container requesting the resource
      * @param value Version value to validate.
      * @return Status of the version.

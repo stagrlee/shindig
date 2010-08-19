@@ -18,7 +18,7 @@
 package org.apache.shindig.server.endtoend;
 
 import org.apache.shindig.auth.BasicSecurityToken;
-import org.apache.shindig.auth.BasicSecurityTokenDecoder;
+import org.apache.shindig.auth.BasicSecurityTokenCodec;
 import org.apache.shindig.auth.SecurityToken;
 import org.apache.shindig.common.JsonAssert;
 import org.apache.shindig.common.crypto.BlobCrypterException;
@@ -32,14 +32,12 @@ import com.gargoylesoftware.htmlunit.html.DomNode;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
 import com.gargoylesoftware.htmlunit.html.HtmlElement;
 import com.gargoylesoftware.htmlunit.html.HTMLParserListener;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.After;
 import org.junit.AfterClass;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -48,7 +46,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -196,7 +193,7 @@ public class EndToEndTest {
   @Test
   public void testCajaFailUrlGadgets() throws Exception {
     try {
-      HtmlPage page = executePageTest("failCajaUrlTest", null, /* caja */ true);
+      executePageTest("failCajaUrlTest", null, /* caja */ true);
     } catch (FailingHttpStatusCodeException e) {
       assertEquals(HttpServletResponse.SC_BAD_REQUEST, e.getStatusCode());
     }
@@ -215,14 +212,14 @@ public class EndToEndTest {
       jsonObjects.put(jsonObj.getString("id"), jsonObj);
     }
     
-    JSONObject me = jsonObjects.get("me").getJSONObject("data");
+    JSONObject me = jsonObjects.get("me").getJSONObject("result");
     assertEquals("Digg", me.getJSONObject("name").getString("familyName"));
     
-    JSONObject json = jsonObjects.get("json").getJSONObject("data");
+    JSONObject json = jsonObjects.get("json").getJSONObject("result");
     JSONObject expected = new JSONObject("{content: {key: 'value'}, status: 200}");
     JsonAssert.assertJsonObjectEquals(expected, json);
     
-    JsonAssert.assertObjectEquals("{id: 'var', data: 'value'}", jsonObjects.get("var"));
+    JsonAssert.assertObjectEquals("{id: 'var', result: 'value'}", jsonObjects.get("var"));
   }
 
   // TODO PML - convert this to use junit 4 Theories to simplify this.
@@ -259,13 +256,13 @@ public class EndToEndTest {
 
 
   @Test
-  @Ignore("Problem with taming") // FIXME
+  //@Ignore("Problem with taming") // FIXME
   public void testCajaOsapiAppdata() throws Exception {
     executeAllPageTests("osapi/appdataTest", true /* caja */);
   }
 
   @Test
-  @Ignore("Problem with taming") // FIXME
+  //@Ignore("Problem with taming") // FIXME
   public void testCajaOsapiBatch() throws Exception {
     executeAllPageTests("osapi/batchTest", true /* caja */);
   }
@@ -317,7 +314,8 @@ public class EndToEndTest {
   @Test
   public void testTemplateLibrary() throws Exception {
     HtmlPage page = executeAllPageTests("templateLibrary");
-    assertTrue(page.asXml().contains("p {color: red}"));
+    String pageXml = page.asXml();
+    assertTrue(pageXml.replaceAll("[\n\r ]", "").contains("p{color:red}"));
     
     Node paragraph = page.getElementsByTagName("p").item(0);
     assertEquals("Hello world", paragraph.getTextContent().trim());
@@ -343,6 +341,7 @@ public class EndToEndTest {
     webClient.setAjaxController(new NicelyResynchronizingAjaxController());
     webClient.waitForBackgroundJavaScript(2000);
     webClient.setHTMLParserListener(HTMLParserListener.LOG_REPORTER);
+    webClient.setTimeout(3000);
 
     alertHandler = new CollectingAlertHandler();
     webClient.setAlertHandler(alertHandler);
@@ -399,8 +398,8 @@ public class EndToEndTest {
 
     String gadgetUrl = EndToEndServer.SERVER_URL + '/' + testName;
     String url = EndToEndServer.GADGET_BASEURL + "?url=" + URLEncoder.encode(gadgetUrl, "UTF-8");
-    BasicSecurityTokenDecoder decoder = new BasicSecurityTokenDecoder();
-    url += "&st=" + URLEncoder.encode(decoder.encodeToken(token), "UTF-8");
+    BasicSecurityTokenCodec codec = new BasicSecurityTokenCodec();
+    url += "&st=" + URLEncoder.encode(codec.encodeToken(token), "UTF-8");
     if (testMethod != null) {
       url += "&testMethod=" + URLEncoder.encode(testMethod, "UTF-8");
     }
@@ -443,6 +442,6 @@ public class EndToEndTest {
 
   private BasicSecurityToken createToken(String owner, String viewer)
       throws BlobCrypterException {
-    return new BasicSecurityToken(owner, viewer, "test", "domain", "appUrl", "1", "default", null);
+    return new BasicSecurityToken(owner, viewer, "test", "domain", "appUrl", "1", "default", null, null);
   }
 }

@@ -6,7 +6,7 @@ Checking out the source code from SVN
 2) Create a subdirectory and checkout the Apache Shindig code from its Subversion repository
   * mkdir ~/src/shindig (or wherever you'd like to put it)
   * cd ~/src/shindig
-3) svn co http://svn.apache.org/repos/asf/incubator/shindig/trunk/ .
+3) svn co http://svn.apache.org/repos/asf/shindig/trunk/ .
 
 
 Installing and running the various java servers
@@ -43,7 +43,7 @@ Installing and running the various java servers
   http://localhost:8080/gadgets/ifr?url=http://www.labpixies.com/campaigns/todo/todo.xml
 
   Or you can take a look at the sample container here:
-  http://localhost:8080/gadgets/files/samplecontainer/samplecontainer.html
+  http://localhost:8080/samplecontainer/samplecontainer.html
 
 
 Editing the Shindig code with Eclipse
@@ -88,7 +88,7 @@ Editing the Shindig code with Eclipse
 
     There is a maven-eclipse-plugin bug tracking this issue in MECLIPSE-444.
 
-To remove all eclipse-related metatdata from your shindig source tree, run:
+To remove all eclipse-related metadata from your shindig source tree, run:
 
      mvn eclipse:clean
 
@@ -122,8 +122,8 @@ Caja is an important part of OpenSocial that greatly enhances JavaScript securit
 Caja is managed in a separate open source project hosted by Google code projects.
 For more information on Caja, see: http://code.google.com/p/google-caja/wiki/GettingStarted
 
-   1) Load this page: http://localhost:8080/gadgets/files/samplecontainer/samplecontainer.html
-   2) Point it to this gadget: http://localhost:8080/gadgets/files/samplecontainer/examples/SocialHelloWorld.xml
+   1) Load this page: http://localhost:8080/samplecontainer/samplecontainer.html
+   2) Point it to this gadget: http://localhost:8080/samplecontainer/examples/SocialHelloWorld.xml
 
 To see the cajoled code (Firefox only), right-click inside the iframe and do "This Frame -> View Frame Source"    
     
@@ -131,7 +131,7 @@ To see the cajoled code (Firefox only), right-click inside the iframe and do "Th
 Additional Reading
 ----------------------------------
 
-For more information, see http://incubator.apache.org/projects/shindig.html
+For more information, see http://shindig.apache.org/
 
 Read javascript/README for instructions for using the Apache Shindig Gadget Container JavaScript
 to enable your page to render Gadgets using gmodules.com or a server started up as described above.

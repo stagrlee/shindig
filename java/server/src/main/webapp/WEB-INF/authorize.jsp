@@ -16,10 +16,10 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
 -->
-<%@ page import="org.jsecurity.SecurityUtils" %>
+<%@ page import="org.apache.shiro.SecurityUtils" %>
 <%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
 <%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt" %>
-<%@ taglib prefix="jsec" uri="http://www.jsecurity.org/tags" %>
+<%@ taglib prefix="shiro" uri="http://shiro.apache.org/tags" %>
 
 <%@ page import="net.oauth.OAuthConsumer" %>
 <%@ page import="org.apache.shindig.social.opensocial.oauth.OAuthEntry" %>
@@ -63,7 +63,7 @@ under the License.
   <title>Your Friendly OAuth Provider</title>
 </head>
 <body>
-Greetings <jsec:principal/>,<br/><br/>
+Greetings <shiro:principal/>,<br/><br/>
 
 The following application wants to access your account information<br/><br/>
 
@@ -71,17 +71,9 @@ The following application wants to access your account information<br/><br/>
 <img src="${appThumbnail}" align="left" width="120" height="60"/>
 <c:out value="${appDesc}" default=""/>
 <br/>
-<c:if test="${SECURITY_THREAT_2009_1}">
-  <font color="red"><b>POSSIBLE SECURITY RISK</b> - 
-  Deny this request unless you directly initiated it from the Official 
-  <i><c:out value="${appTitle}"/></i> web site
-  </font>
-</c:if>
 
 <form name="authZForm" action="authorize" method="POST">
   <input type="hidden" name="oauth_token" value="<%= token %>"/>
-  <input type="hidden" name="oauth_callback" value="<%= 
-    (callback != null ? URLEncoder.encode(callback, "UTF-8") : "") %>"/>
   <input type="submit" name="Authorize" value="Deny"/>
   <input type="submit" name="Authorize" value="Authorize"/>
 </form>

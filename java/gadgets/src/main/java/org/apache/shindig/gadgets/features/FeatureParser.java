@@ -20,7 +20,6 @@ package org.apache.shindig.gadgets.features;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 
 import org.apache.shindig.common.uri.Uri;
 import org.apache.shindig.common.xml.XmlException;
@@ -32,7 +31,6 @@ import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -104,7 +102,7 @@ class FeatureParser {
     return attribs.build();
   }
   
-  static class ParsedFeature {
+  static final class ParsedFeature {
     private final String name;
     private final List<String> deps;
     private final List<Bundle> bundles;
@@ -127,7 +125,7 @@ class FeatureParser {
       return bundles;
     }
     
-    public static class Bundle {
+    public final static class Bundle {
       private final String type;
       private final Map<String, String> attribs;
       private final List<Resource> resources;
@@ -151,7 +149,7 @@ class FeatureParser {
       }
     }
     
-    static class Resource {
+    static final class Resource {
       private final Uri source;
       private final String content;
       private final Map<String, String> attribs;

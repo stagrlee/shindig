@@ -17,10 +17,13 @@
  */
 package org.apache.shindig.gadgets.features;
 
+import com.google.common.base.Preconditions;
 import com.google.inject.Inject;
+import com.google.inject.name.Named;
 
 import org.apache.shindig.common.uri.Uri;
 import org.apache.shindig.common.util.ResourceLoader;
+import org.apache.shindig.common.util.TimeSource;
 import org.apache.shindig.gadgets.GadgetException;
 import org.apache.shindig.gadgets.http.HttpFetcher;
 import org.apache.shindig.gadgets.http.HttpRequest;
@@ -35,14 +38,27 @@ import java.util.logging.Logger;
  * Class that loads FeatureResource objects used to populate JS feature code.
  */
 public class FeatureResourceLoader {
-  private static final Logger logger
+  private static final Logger LOG
       = Logger.getLogger("org.apache.shindig.gadgets");
   
   private HttpFetcher fetcher;
+  private TimeSource timeSource = new TimeSource();
+  private int updateCheckFrequency = 0;  // <= 0 -> only load data once, don't check for updates.
 
   @Inject
   public void setHttpFetcher(HttpFetcher fetcher) {
     this.fetcher = fetcher;
+  }
+  
+  @Inject
+  public void setTimeSource(TimeSource timeSource) {
+    this.timeSource = timeSource;
+  }
+  
+  @Inject(optional = true)
+  public void setSupportFileUpdates(
+      @Named("shindig.features.loader.file-update-check-frequency-ms") int updateCheckFrequency) {
+    this.updateCheckFrequency = updateCheckFrequency;
   }
   
   /**
@@ -74,8 +90,7 @@ public class FeatureResourceLoader {
   }
   
   protected FeatureResource loadFile(String path, Map<String, String> attribs) throws IOException {
-    return new DualModeStaticResource(path, getFileContent(new File(getOptPath(path))),
-        getFileContent(new File(path)));
+    return new DualModeFileResource(getOptPath(path), path);
   }
   
   protected String getFileContent(File file) {
@@ -114,16 +129,80 @@ public class FeatureResourceLoader {
     return orig;
   }
   
-  private static class DualModeStaticResource extends FeatureResource.Default {
+  // Overridable for easier testing.
+  protected boolean fileHasChanged(File file, long lastModified) {
+    return file.lastModified() > lastModified;
+  }
+  
+  private class DualModeFileResource extends FeatureResource.Default {
+    private final FileContent optContent;
+    private final FileContent dbgContent;
+    
+    protected DualModeFileResource(String optFilePath, String dbgFilePath) {
+      this.optContent = new FileContent(optFilePath);
+      this.dbgContent = new FileContent(dbgFilePath);
+      Preconditions.checkArgument(optContent.get() != null || dbgContent.get() != null,
+        "Problems reading resource: %s", dbgFilePath);
+    }
+
+    public String getContent() {
+      String opt = optContent.get();
+      return opt != null ? opt : dbgContent.get();
+    }
+
+    public String getDebugContent() {
+      String dbg = dbgContent.get();
+      return dbg != null ? dbg : optContent.get();
+    }
+    
+    private final class FileContent {
+      private final String filePath;
+      private long lastModified;
+      private long lastUpdateCheckTime;
+      private String content;
+      
+      private FileContent(String filePath) {
+        this.filePath = filePath;
+        this.lastModified = 0;
+        this.lastUpdateCheckTime = 0;
+      }
+      
+      private String get() {
+        long nowTime = timeSource.currentTimeMillis();
+        if (content == null ||
+            (updateCheckFrequency > 0 &&
+             (lastUpdateCheckTime + updateCheckFrequency) < nowTime)) {
+          // Only check for file updates at preconfigured intervals. This prevents
+          // overwhelming the file system while maintaining a reasonable update rate w/o
+          // implementing a full event-driven mechanism.
+          lastUpdateCheckTime = nowTime;
+          File file = new File(filePath);
+          if (fileHasChanged(file, lastModified)) {
+            // Only reload file content if it's changed (or if it's the first
+            // load, when this check will succeed).
+            String newContent = getFileContent(file);
+            if (newContent != null) {
+              content = newContent;
+              lastModified = file.lastModified();
+            } else if (content != null) {
+              // Content existed before, file removed - log error.
+              LOG.warning("File existed before but is now missing! Name: " + filePath);
+            }
+          }
+        }
+        return content;
+      }
+    }
+  }
+  
+  private static final class DualModeStaticResource extends FeatureResource.Default {
     private final String content;
     private final String debugContent;
     
     private DualModeStaticResource(String path, String content, String debugContent) {
       this.content = content != null ? content : debugContent;
       this.debugContent = debugContent != null ? debugContent : content;
-      if (this.content == null) {
-        throw new IllegalArgumentException("Problems reading resource: " + path);
-      }
+      Preconditions.checkArgument(this.content != null, "Problems reading resource: %s", path);
     }
 
     public String getContent() {
@@ -135,7 +214,7 @@ public class FeatureResourceLoader {
     }
   }
   
-  private static class UriResource implements FeatureResource {
+  private static final class UriResource implements FeatureResource {
     private final HttpFetcher fetcher;
     private final Uri uri;
     private final boolean isInline;
@@ -172,10 +251,10 @@ public class FeatureResourceLoader {
           if (response.getHttpStatusCode() == HttpResponse.SC_OK) {
             content = response.getResponseAsString();
           } else {
-            logger.warning("Unable to retrieve remote library from " + uri);
+            LOG.warning("Unable to retrieve remote library from " + uri);
           }
         } catch (GadgetException e) {
-          logger.warning("Unable to retrieve remote library from " + uri);
+          LOG.warning("Unable to retrieve remote library from " + uri);
         }
       }
       

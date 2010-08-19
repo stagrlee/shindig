@@ -19,8 +19,12 @@ package org.apache.shindig.auth;
 
 import com.google.common.collect.Maps;
 import com.google.inject.Inject;
+import net.oauth.OAuth;
 
+import java.util.Enumeration;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.servlet.http.HttpServletRequest;
 
@@ -28,13 +32,14 @@ import javax.servlet.http.HttpServletRequest;
  * Produces security tokens by extracting the "st" parameter from the request url or post body.
  */
 public class UrlParameterAuthenticationHandler implements AuthenticationHandler {
-  private static final String TOKEN_PARAM = "st";
+  private static final String SECURITY_TOKEN_PARAM = "st";
 
-  private final SecurityTokenDecoder securityTokenDecoder;
+  private final SecurityTokenCodec securityTokenCodec;
+  private static final Pattern COMMAWHITESPACE = Pattern.compile("\\s*,\\s*");
 
   @Inject
-  public UrlParameterAuthenticationHandler(SecurityTokenDecoder securityTokenDecoder) {
-    this.securityTokenDecoder = securityTokenDecoder;
+  public UrlParameterAuthenticationHandler(SecurityTokenCodec securityTokenCodec) {
+    this.securityTokenCodec = securityTokenCodec;
   }
 
   public String getName() {
@@ -45,13 +50,13 @@ public class UrlParameterAuthenticationHandler implements AuthenticationHandler 
       throws InvalidAuthenticationException {
     Map<String, String> parameters = getMappedParameters(request);
     try {
-      if (parameters.get(SecurityTokenDecoder.SECURITY_TOKEN_NAME) == null) {
+      if (parameters.get(SecurityTokenCodec.SECURITY_TOKEN_NAME) == null) {
         return null;
       }
-      return securityTokenDecoder.createToken(parameters);
+      return securityTokenCodec.createToken(parameters);
     } catch (SecurityTokenException e) {
       throw new InvalidAuthenticationException("Malformed security token " +
-          parameters.get(SecurityTokenDecoder.SECURITY_TOKEN_NAME), e);
+          parameters.get(SecurityTokenCodec.SECURITY_TOKEN_NAME), e);
     }
   }
 
@@ -59,15 +64,46 @@ public class UrlParameterAuthenticationHandler implements AuthenticationHandler 
     return null;
   }
 
-  protected SecurityTokenDecoder getSecurityTokenDecoder() {
-    return this.securityTokenDecoder;
+  protected SecurityTokenCodec getSecurityTokenCodec() {
+    return this.securityTokenCodec;
   }
 
-  protected Map<String, String> getMappedParameters(
-      final HttpServletRequest request) {
+  // From OAuthMessage
+  private static final Pattern AUTHORIZATION = Pattern.compile("\\s*(\\w*)\\s+(.*)");
+  private static final Pattern NVP = Pattern.compile("(\\S*)\\s*\\=\\s*\"([^\"]*)\"");
+
+  protected Map<String, String> getMappedParameters(final HttpServletRequest request) {
     Map<String, String> params = Maps.newHashMap();
-    params.put(SecurityTokenDecoder.SECURITY_TOKEN_NAME, request.getParameter(TOKEN_PARAM));
-    params.put(SecurityTokenDecoder.ACTIVE_URL_NAME, getActiveUrl(request));
+    String token = null;
+
+    // old style security token
+    if (token == null) {
+      token = request.getParameter(SECURITY_TOKEN_PARAM);
+    }
+
+    // OAuth2 token as a param
+    // NOTE: if oauth_signature_method is present then we have a OAuth 1.0 request
+    if (token == null && request.isSecure() && request.getParameter(OAuth.OAUTH_SIGNATURE_METHOD) == null) {
+      token = request.getParameter(OAuth.OAUTH_TOKEN);
+    }
+
+    // token in authorization header
+    if (token == null) {
+      for (Enumeration<String> headers = request.getHeaders("Authorization"); headers != null && headers.hasMoreElements();) {
+        Matcher m = AUTHORIZATION.matcher(headers.nextElement());
+        if (m.matches() && "Token".equalsIgnoreCase(m.group(1))) {
+          for (String nvp : COMMAWHITESPACE.split(m.group(2))) {
+            m = NVP.matcher(nvp);
+            if (m.matches() && "token".equals(m.group(1))) {
+              token = OAuth.decodePercent(m.group(2));
+            }
+          }
+        }
+      }
+    }
+
+    params.put(SecurityTokenCodec.SECURITY_TOKEN_NAME, token);
+    params.put(SecurityTokenCodec.ACTIVE_URL_NAME, getActiveUrl(request));
     return params;
   }
   

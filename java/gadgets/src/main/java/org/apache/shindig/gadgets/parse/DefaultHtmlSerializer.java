@@ -66,7 +66,10 @@ public class DefaultHtmlSerializer implements HtmlSerializer {
         break;
       }
       case Node.DOCUMENT_NODE: {
-        serialize(((Document)n).getDocumentElement(), output, xmlMode);
+        NodeList children = ((Document)n).getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+          serialize(children.item(i), output, xmlMode);
+        }
         break;
       }
       case Node.ELEMENT_NODE: {
@@ -107,7 +110,7 @@ public class DefaultHtmlSerializer implements HtmlSerializer {
    * type attribute on output
    */
   private Element substituteElement(Element elem) {
-    String scriptType = GadgetHtmlParser.SCRIPT_TYPE_TO_OSML_TAG.inverse().get(elem.getNodeName());
+    String scriptType = SocialDataTags.SCRIPT_TYPE_TO_OSML_TAG.inverse().get(elem.getNodeName());
     if (scriptType != null) {
       Element replacement = elem.getOwnerDocument().createElement("script");
       replacement.setAttribute("type", scriptType);

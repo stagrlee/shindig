@@ -29,6 +29,7 @@ import org.apache.shindig.gadgets.servlet.JsServlet;
 import org.apache.shindig.gadgets.servlet.MakeRequestServlet;
 import org.apache.shindig.protocol.DataServiceServlet;
 import org.apache.shindig.protocol.JsonRpcServlet;
+import org.apache.shindig.social.core.config.SocialApiGuiceModule;
 import org.apache.shindig.social.sample.SampleModule;
 import org.mortbay.jetty.Server;
 import org.mortbay.jetty.handler.ResourceHandler;
@@ -58,10 +59,13 @@ import com.google.common.collect.Maps;
  */
 public class EndToEndServer {
   private static final int JETTY_PORT = 9003;
+
   private static final String GADGET_BASE = "/gadgets/ifr";
   private static final String GADGET_RPC_BASE = "/gadgets/api/rpc/*";
-  private static final String REST_BASE = "/social/rest/*";
-  private static final String JSON_RPC_BASE = "/social/rpc/*";
+  private static final String SOCIAL_REST_BASE = "/social/rest/*";
+  private static final String SOCIAL_RPC_BASE = "/social/rpc/*";
+  private static final String RPC_BASE = "/rpc";
+  private static final String REST_BASE = "/rest";
   private static final String CONCAT_BASE = "/gadgets/concat";
   private static final String JS_BASE = "/gadgets/js/*";
   private static final String MAKE_REQUEST_BASE = "/gadgets/makeRequest";
@@ -101,6 +105,9 @@ public class EndToEndServer {
    * Starts the server for end-to-end tests.
    */
   private Server createServer(int port) throws Exception {
+    System.setProperty("shindig.port", String.valueOf(port));
+    System.setProperty("jetty.port", String.valueOf(port));
+
     Server newServer = new Server(port);
 
     // Attach the test resources in /endtoend as static content for the test
@@ -114,8 +121,12 @@ public class EndToEndServer {
 
     Map<String, String> initParams = Maps.newHashMap();
     String modules = Joiner.on(":")
-        .join(SampleModule.class.getName(), DefaultGuiceModule.class.getName(),
-            PropertiesModule.class.getName(), OAuthModule.class.getName());
+        .join(SocialApiGuiceModule.class.getName(),
+              SampleModule.class.getName(), 
+              DefaultGuiceModule.class.getName(),
+              PropertiesModule.class.getName(), 
+              OAuthModule.class.getName()
+             );
 
     initParams.put(GuiceServletContextListener.MODULES_ATTRIBUTE, modules);
     context.setInitParams(initParams);
@@ -127,25 +138,23 @@ public class EndToEndServer {
     // Attach DataServiceServlet, wrapped in a proxy to fake errors
     ServletHolder restServletHolder = new ServletHolder(new ForceErrorServlet(
         new DataServiceServlet()));
-    restServletHolder.setInitParameter("handlers", "org.apache.shindig.social.handlers");
-    context.addServlet(restServletHolder, REST_BASE);
-    context.addFilter(AuthenticationServletFilter.class, REST_BASE, 0);
+    restServletHolder.setInitParameter("handlers", "org.apache.shindig.handlers");
+    context.addServlet(restServletHolder, SOCIAL_REST_BASE);
+    context.addFilter(AuthenticationServletFilter.class, SOCIAL_REST_BASE, 0);
 
     // Attach JsonRpcServlet, wrapped in a proxy to fake errors
     ServletHolder rpcServletHolder = new ServletHolder(new ForceErrorServlet(new JsonRpcServlet()));
-    rpcServletHolder.setInitParameter("handlers", "org.apache.shindig.social.handlers");
-    context.addServlet(rpcServletHolder, JSON_RPC_BASE);
-    context.addFilter(AuthenticationServletFilter.class, JSON_RPC_BASE, 0);
+    rpcServletHolder.setInitParameter("handlers", "org.apache.shindig.handlers");
+    context.addServlet(rpcServletHolder, SOCIAL_RPC_BASE);
+    context.addFilter(AuthenticationServletFilter.class, SOCIAL_RPC_BASE, 0);
+    context.addServlet(rpcServletHolder, GADGET_RPC_BASE);
+    context.addFilter(AuthenticationServletFilter.class, GADGET_RPC_BASE, 0);
+    context.addServlet(rpcServletHolder, RPC_BASE);
+    context.addFilter(AuthenticationServletFilter.class, RPC_BASE, 0);
 
     // Attach the ConcatProxyServlet - needed for rewritten JS
     ServletHolder concatHolder = new ServletHolder(new ConcatProxyServlet());
     context.addServlet(concatHolder, CONCAT_BASE);
-
-    // Attach the Gadget 
-    ServletHolder gadgetsJsonRpcServletHolder = new ServletHolder(new JsonRpcServlet());
-    gadgetsJsonRpcServletHolder.setInitParameter("handlers", "org.apache.shindig.gadgets.handlers");
-    context.addServlet(gadgetsJsonRpcServletHolder, GADGET_RPC_BASE);
-    context.addFilter(AuthenticationServletFilter.class, GADGET_RPC_BASE, 0);
 
     // Attach the JsServlet - needed for rewritten JS
     ServletHolder jsHolder = new ServletHolder(new JsServlet());

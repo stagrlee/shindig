@@ -30,12 +30,11 @@ import org.apache.shindig.common.uri.UriBuilder;
 import org.apache.shindig.gadgets.Gadget;
 import org.apache.shindig.gadgets.GadgetContext;
 import org.apache.shindig.gadgets.LockedDomainService;
-import org.apache.shindig.gadgets.UrlGenerator;
 import org.apache.shindig.gadgets.http.HttpRequest;
-import org.apache.shindig.gadgets.oauth.OAuthResponseParams.OAuthRequestException;
 import org.apache.shindig.gadgets.process.ProcessingException;
 import org.apache.shindig.gadgets.process.Processor;
 import org.apache.shindig.gadgets.servlet.OAuthCallbackServlet;
+import org.apache.shindig.gadgets.uri.OAuthUriManager;
 
 /**
  * Generates callback URLs for gadgets using OAuth 1.0a.  There are three relevant callback URLs:
@@ -81,29 +80,23 @@ import org.apache.shindig.gadgets.servlet.OAuthCallbackServlet;
  */
 public class GadgetOAuthCallbackGenerator implements OAuthCallbackGenerator {
 
-  private final boolean enableSignedCallbacks;
   private final Processor processor;
   private final LockedDomainService lockedDomainService;
-  private final UrlGenerator urlGenerator;
+  private final OAuthUriManager oauthUriManager;
   private final BlobCrypter stateCrypter;
 
   @Inject
-  public GadgetOAuthCallbackGenerator(@Named("shindig.signing.enable-signed-callbacks")
-      boolean enableSignedCallbacks, Processor processor, LockedDomainService lockedDomainService,
-      UrlGenerator urlGenerator, @Named(OAuthFetcherConfig.OAUTH_STATE_CRYPTER)
+  public GadgetOAuthCallbackGenerator(Processor processor, LockedDomainService lockedDomainService,
+      OAuthUriManager oauthUriManager, @Named(OAuthFetcherConfig.OAUTH_STATE_CRYPTER)
       BlobCrypter stateCrypter) {
-    this.enableSignedCallbacks = enableSignedCallbacks;
     this.processor = processor;
     this.lockedDomainService = lockedDomainService;
-    this.urlGenerator = urlGenerator;
+    this.oauthUriManager = oauthUriManager;
     this.stateCrypter = stateCrypter;
   }
   
   public String generateCallback(OAuthFetcherConfig fetcherConfig, String baseCallback,
       HttpRequest request, OAuthResponseParams responseParams) throws OAuthRequestException {
-    if (!enableSignedCallbacks) {
-      return null;
-    }
     Uri activeUrl = checkGadgetCanRender(request.getSecurityToken(),
         request.getOAuthArguments(), responseParams);
     String gadgetDomainCallback = getGadgetDomainCallback(request.getSecurityToken(), activeUrl);
@@ -124,25 +117,24 @@ public class GadgetOAuthCallbackGenerator implements OAuthCallbackGenerator {
       Uri activeUrl = Uri.parse(securityToken.getActiveUrl());
       String hostname = activeUrl.getAuthority();
       if (!lockedDomainService.gadgetCanRender(hostname, gadget, securityToken.getContainer())) {
-        throw responseParams.oauthRequestException(OAuthError.UNKNOWN_PROBLEM,
+        throw new OAuthRequestException(OAuthError.UNKNOWN_PROBLEM,
             "Gadget should not be using URL " + activeUrl);
       }
       return activeUrl;
     } catch (ProcessingException e) {
-      throw responseParams.oauthRequestException(OAuthError.UNKNOWN_PROBLEM,
+      throw new OAuthRequestException(OAuthError.UNKNOWN_PROBLEM,
           "Unable to check if gadget is using locked-domain", e);
     }
   }
 
   private String getGadgetDomainCallback(SecurityToken securityToken, Uri activeUrl) {
-    String baseCallback = urlGenerator.getGadgetDomainOAuthCallback(
+    Uri gadgetCallback = oauthUriManager.makeOAuthCallbackUri(
         securityToken.getContainer(), activeUrl.getAuthority());
-    if (baseCallback == null) {
+    if (gadgetCallback == null) {
       return null;
     }
-    UriBuilder gadgetCallback = UriBuilder.parse(baseCallback);
     if (StringUtils.isEmpty(gadgetCallback.getScheme())) {
-      gadgetCallback.setScheme(activeUrl.getScheme());
+      gadgetCallback = new UriBuilder(gadgetCallback).setScheme(activeUrl.getScheme()).toUri();
     }
     return gadgetCallback.toString();
   }
@@ -157,7 +149,7 @@ public class GadgetOAuthCallbackGenerator implements OAuthCallbackGenerator {
       callback.addQueryParameter(OAuthCallbackServlet.CALLBACK_STATE_PARAM,
           state.getEncryptedState());
     } catch (BlobCrypterException e) {
-      throw responseParams.oauthRequestException(OAuthError.UNKNOWN_PROBLEM,
+      throw new OAuthRequestException(OAuthError.UNKNOWN_PROBLEM,
           "Failure generating callback URL", e);
     }
     return callback.toString();

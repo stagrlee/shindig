@@ -17,9 +17,10 @@
  */
 package org.apache.shindig.gadgets.features;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.inject.internal.ImmutableMap;
 
 import org.apache.shindig.common.uri.Uri;
 import org.apache.shindig.common.uri.UriBuilder;
@@ -67,7 +68,7 @@ public class FeatureRegistryTest {
   private static int resourceIdx = 0;
   private FeatureResourceLoader resourceLoader;
   private ResourceMock resourceMock;
-  FeatureRegistry registry;
+  private FeatureRegistry registry;
   private Map<String, String> lastAttribs;
 
   @Before
@@ -92,7 +93,7 @@ public class FeatureRegistryTest {
 
   private class TestFeatureRegistry extends FeatureRegistry {
     TestFeatureRegistry(String featureFiles) throws GadgetException {
-      super(resourceLoader, featureFiles);
+      super(resourceLoader, ImmutableList.<String>of(featureFiles));
     }
     @Override
     String getResourceContent(String resource) throws IOException {
@@ -723,11 +724,11 @@ public class FeatureRegistryTest {
     for (Map.Entry<String, String> entry : resourceAttribs.entrySet()) {
       sbRes.append(entry.getKey()).append("=\"").append(entry.getValue()).append("\" ");
     }
-    return tpl.replaceAll("%type%", type)
-        .replaceAll("%uri%", uri != null ? "src=\"" + uri + '\"' : "")
-        .replaceAll("%content%", content != null ? content : "")
-        .replaceAll("%type_attribs%", sb.toString())
-        .replaceAll("%res_attribs%", sbRes.toString());
+    return tpl.replace("%type%", type)
+        .replace("%uri%", uri != null ? "src=\"" + uri + '\"' : "")
+        .replace("%content%", content != null ? content : "")
+        .replace("%type_attribs%", sb.toString())
+        .replace("%res_attribs%", sbRes.toString());
   }
   
   private static Uri makeFile(String content) throws Exception {

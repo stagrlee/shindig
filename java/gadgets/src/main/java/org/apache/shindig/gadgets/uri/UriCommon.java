@@ -31,6 +31,7 @@ public interface UriCommon {
     NO_CACHE("nocache"),
     VERSION("v"),
     SECURITY_TOKEN("st"),
+    OAUTH2_TOKEN("oauth_token"),
     MODULE_ID("mid"),
     REFRESH("refresh"),
     LIBS("libs"),
@@ -38,6 +39,8 @@ public interface UriCommon {
     TYPE("type"),
     REWRITE_MIME_TYPE("rewriteMime"),
     SANITIZE("sanitize"),
+    CAJOLE("cajole"),    
+    CONTAINER_MODE("c"),
     
     // Proxy resize params:
     RESIZE_HEIGHT("resize_h"),
@@ -45,6 +48,7 @@ public interface UriCommon {
     RESIZE_QUALITY("resize_q"),
     NO_EXPAND("no_expand"),
     FALLBACK_URL_PARAM("fallback_url"),
+    RETURN_ORIGINAL_CONTENT_ON_ERROR("rooe"),
     
     // This is a legacy param, superseded by container.
     @Deprecated

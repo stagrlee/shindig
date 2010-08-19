@@ -18,38 +18,51 @@
  */
 package org.apache.shindig.gadgets.servlet;
 
-import static org.easymock.EasyMock.capture;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.isA;
-
+import com.google.common.base.Objects;
 import com.google.common.collect.Maps;
 
+import org.apache.shindig.common.EasyMockTestCase;
 import org.apache.shindig.common.uri.Uri;
-import org.apache.shindig.common.util.Utf8UrlCoder;
+import org.apache.shindig.config.ContainerConfig;
+import org.apache.shindig.gadgets.Gadget;
 import org.apache.shindig.gadgets.GadgetException;
 import org.apache.shindig.gadgets.http.HttpRequest;
 import org.apache.shindig.gadgets.http.HttpResponse;
 import org.apache.shindig.gadgets.http.HttpResponseBuilder;
-import org.apache.shindig.gadgets.uri.PassthruManager;
+import org.apache.shindig.gadgets.http.RequestPipeline;
+import org.apache.shindig.gadgets.rewrite.CaptureRewriter;
+import org.apache.shindig.gadgets.rewrite.DefaultResponseRewriterRegistry;
+import org.apache.shindig.gadgets.rewrite.DomWalker;
+import org.apache.shindig.gadgets.rewrite.MutableContent;
+import org.apache.shindig.gadgets.rewrite.ResponseRewriter;
+import org.apache.shindig.gadgets.rewrite.ResponseRewriterRegistry;
+import org.apache.shindig.gadgets.rewrite.RewritingException;
 import org.apache.shindig.gadgets.uri.ProxyUriManager;
 import org.apache.shindig.gadgets.uri.UriCommon.Param;
 import org.easymock.Capture;
+import org.easymock.EasyMock;
+import static org.easymock.EasyMock.capture;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.isA;
 import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import javax.servlet.http.HttpServletResponse;
-
-public class ProxyHandlerTest extends ServletTestFixture {
+public class ProxyHandlerTest extends EasyMockTestCase {
   private final static String URL_ONE = "http://www.example.org/test.html";
   private final static String DATA_ONE = "hello world";
 
-  private final ProxyUriManager passthruManager = new PassthruManager();
+  public final RequestPipeline pipeline = mock(RequestPipeline.class);
+  public CaptureRewriter rewriter = new CaptureRewriter();
+  public ResponseRewriterRegistry rewriterRegistry
+      = new DefaultResponseRewriterRegistry(Arrays.<ResponseRewriter>asList(rewriter), null);
+  private ProxyUriManager.ProxyUri request;
+  
   private final ProxyHandler proxyHandler
-      = new ProxyHandler(pipeline, lockedDomainService, rewriterRegistry, passthruManager);
-
+      = new ProxyHandler(pipeline, rewriterRegistry, true);
+  
   private void expectGetAndReturnData(String url, byte[] data) throws Exception {
     HttpRequest req = new HttpRequest(Uri.parse(url));
     HttpResponse resp = new HttpResponseBuilder().setResponse(data).create();
@@ -63,74 +76,91 @@ public class ProxyHandlerTest extends ServletTestFixture {
     expect(pipeline.execute(req)).andReturn(resp);
   }
   
-  private void setupProxyRequestBase(String host) {
-    expect(request.getServerName()).andReturn(host).anyTimes();
-    expect(request.getScheme()).andReturn("http").anyTimes();
-    expect(request.getServerPort()).andReturn(80).anyTimes();
-    expect(request.getRequestURI()).andReturn("/").anyTimes();
+  private void setupProxyRequestMock(String host, String url,
+      boolean noCache, int refresh, String rewriteMime, String fallbackUrl) throws Exception {
+    request = new ProxyUriManager.ProxyUri(
+        refresh, false, noCache, ContainerConfig.DEFAULT_CONTAINER, null, Uri.parse(url));
+    request.setFallbackUrl(fallbackUrl);
+    request.setRewriteMimeType(rewriteMime);
   }
 
-  private void setupProxyRequestMock(String host, String url, String... extraParams)
-      throws Exception {
-    setupProxyRequestBase(host);
-    expect(request.getHeader("Host")).andReturn(host);
-    String query = (url != null ? "url=" + Utf8UrlCoder.encode(url) + '&' : "")
-        + "container=default";
-    String[] params = extraParams;
-    if (params != null && params.length > 0) {
-      for (int i = 0; i < params.length; i += 2) {
-        query += '&' + params[i] + '=' + Utf8UrlCoder.encode(params[i+1]);
+  private void setupNoArgsProxyRequestMock(String host, String url) throws Exception {
+    request = new ProxyUriManager.ProxyUri(
+        -1, false, false, ContainerConfig.DEFAULT_CONTAINER, null,
+        url != null ? Uri.parse(url) : null);
+  }
+
+  private ResponseRewriter getResponseRewriterThatThrowsExceptions(
+      final StringBuilder stringBuilder) {
+    return new DomWalker.Rewriter() {
+      public void rewrite(Gadget gadget, MutableContent content)
+          throws RewritingException {
+        stringBuilder.append("exceptionThrown");
+        throw new RewritingException("sad", 404);
       }
-    }
-    expect(request.getQueryString()).andReturn(query);
-  }
 
-  private void setupFailedProxyRequestMock(String host, String url) throws Exception {
-    setupProxyRequestBase(host);
-    expect(request.getHeader("Host")).andReturn(host);
+      public void rewrite(HttpRequest request, HttpResponseBuilder builder)
+          throws RewritingException {
+        stringBuilder.append("exceptionThrown");
+        throw new RewritingException("sad", 404);
+      }
+    };
   }
 
   @Test
-  public void testIfModifiedSinceAlwaysReturnsEarly() throws Exception {
-    expect(request.getHeader("If-Modified-Since"))
-        .andReturn("Yes, this is an invalid header.");
+  public void testInvalidHeaderDropped() throws Exception {
+    String url = "http://example.org/mypage.html";
+    String domain = "example.org";
+
+    setupProxyRequestMock(domain, url, true, -1, null, null);
+
+    HttpRequest req = new HttpRequest(Uri.parse(url))
+        .setIgnoreCache(true);
+    String contentType = "text/html; charset=UTF-8";
+    HttpResponse resp = new HttpResponseBuilder()
+        .setResponseString("Hello")
+        .addHeader("Content-Type", contentType)
+        .addHeader("Content-Length", "200")  // Disallowed header.
+        .addHeader(":", "someDummyValue") // Invalid header name.
+        .create();
+
+    expect(pipeline.execute(req)).andReturn(resp);
+
     replay();
 
-    proxyHandler.fetch(request, recorder);
-    verify();
+    HttpResponse recorder = proxyHandler.fetch(request);
 
-    assertEquals(HttpServletResponse.SC_NOT_MODIFIED, recorder.getHttpStatusCode());
-    assertFalse(rewriter.responseWasRewritten());
+    verify();
+    assertNull(recorder.getHeader(":"));
+    assertNull(recorder.getHeader("Content-Length"));
+    assertEquals(recorder.getHeader("Content-Type"), contentType);
   }
 
   @Test
   public void testLockedDomainEmbed() throws Exception {
-    setupProxyRequestMock("www.example.com", URL_ONE);
-    expect(lockedDomainService.isSafeForOpenProxy("www.example.com")).andReturn(true);
+    setupNoArgsProxyRequestMock("www.example.com", URL_ONE);
     expectGetAndReturnData(URL_ONE, DATA_ONE.getBytes());
+   
     replay();
-
-    proxyHandler.fetch(request, recorder);
+    HttpResponse response = proxyHandler.fetch(request);
     verify();
 
-    assertEquals(DATA_ONE, recorder.getResponseAsString());
+    assertEquals(DATA_ONE, response.getResponseAsString());
     assertTrue(rewriter.responseWasRewritten());
   }
 
   @Test(expected=GadgetException.class)
   public void testNoUrl() throws Exception {
-    setupProxyRequestMock("www.example.com", null);
-    expect(lockedDomainService.isSafeForOpenProxy("www.example.com")).andReturn(true);
+    setupNoArgsProxyRequestMock("www.example.com", null);
     replay();
 
-    proxyHandler.doFetch(request, recorder);
+    proxyHandler.fetch(request);
     fail("Proxy should raise exception if there is no url");
   }
 
   @Test
   public void testHttpRequestFillsParentAndContainer() throws Exception {
-    setupProxyRequestMock("www.example.com", URL_ONE);
-    expect(lockedDomainService.isSafeForOpenProxy("www.example.com")).andReturn(true);
+    setupNoArgsProxyRequestMock("www.example.com", URL_ONE);
     //HttpRequest req = new HttpRequest(Uri.parse(URL_ONE));
     HttpResponse resp = new HttpResponseBuilder().setResponse(DATA_ONE.getBytes()).create();
 
@@ -138,24 +168,15 @@ public class ProxyHandlerTest extends ServletTestFixture {
     expect(pipeline.execute(capture(httpRequest))).andReturn(resp);
 
     replay();
-    proxyHandler.fetch(request, recorder);
+    HttpResponse response = proxyHandler.fetch(request);
     verify();
 
     // Check that the HttpRequest passed in has all the relevant fields sets
     assertEquals("default", httpRequest.getValue().getContainer());
     assertEquals(Uri.parse(URL_ONE), httpRequest.getValue().getUri());
 
-    assertEquals(DATA_ONE, recorder.getResponseAsString());
+    assertEquals(DATA_ONE, response.getResponseAsString());
     assertTrue(rewriter.responseWasRewritten());
-  }
-
-  @Test(expected=GadgetException.class)
-  public void testLockedDomainFailedEmbed() throws Exception {
-    setupFailedProxyRequestMock("www.example.com", URL_ONE);
-    expect(lockedDomainService.isSafeForOpenProxy("www.example.com")).andReturn(false);
-    replay();
-
-    proxyHandler.doFetch(request, response);
   }
 
   @Test
@@ -169,16 +190,52 @@ public class ProxyHandlerTest extends ServletTestFixture {
     headers.put("Content-Type", Arrays.asList(contentType));
     headers.put("X-Magic-Garbage", Arrays.asList(magicGarbage));
 
-    expect(lockedDomainService.isSafeForOpenProxy(domain)).andReturn(true).atLeastOnce();
-    setupProxyRequestMock(domain, url);
+    setupNoArgsProxyRequestMock(domain, url);
     expectGetAndReturnHeaders(url, headers);
 
     replay();
+    HttpResponse response = proxyHandler.fetch(request);
+    verify();
 
-    proxyHandler.fetch(request, recorder);
+    assertEquals(contentType, response.getHeader("Content-Type"));
+    assertEquals(magicGarbage, response.getHeader("X-Magic-Garbage"));
+    assertTrue(rewriter.responseWasRewritten());
+  }
+  
+  @Test
+  public void testOctetSetOnNullContentType() throws Exception {
+    String url = "http://example.org/file.evil";
+    String domain = "example.org";
 
-    assertEquals(contentType, recorder.getHeader("Content-Type"));
-    assertEquals(magicGarbage, recorder.getHeader("X-Magic-Garbage"));
+    setupNoArgsProxyRequestMock(domain, url);
+    expectGetAndReturnHeaders(url, Maps.<String, List<String>>newHashMap());
+
+    replay();
+    HttpResponse response = proxyHandler.fetch(request);
+    verify();
+
+    assertEquals("application/octet-stream", response.getHeader("Content-Type"));
+    assertNotNull(response.getHeader("Content-Disposition"));
+    assertTrue(rewriter.responseWasRewritten());
+  }
+  
+  @Test
+  public void testNoContentDispositionForFlash() throws Exception {
+    // Some headers may be blacklisted. These are OK.
+    String url = "http://example.org/file.evil";
+    String domain = "example.org";
+    Map<String, List<String>> headers = Maps.newHashMap();
+    headers.put("Content-Type", Arrays.asList("application/x-shockwave-flash"));
+
+    setupNoArgsProxyRequestMock(domain, url);
+    expectGetAndReturnHeaders(url, headers);
+
+    replay();
+    HttpResponse response = proxyHandler.fetch(request);
+    verify();
+
+    assertEquals("application/x-shockwave-flash", response.getHeader("Content-Type"));
+    assertNull(response.getHeader("Content-Disposition"));
     assertTrue(rewriter.responseWasRewritten());
   }
   
@@ -188,9 +245,7 @@ public class ProxyHandlerTest extends ServletTestFixture {
     String domain = "example.org";
     String fallback_url = "http://fallback.com/fallback.png";
 
-    expect(lockedDomainService.isSafeForOpenProxy(domain)).andReturn(true).atLeastOnce();
-    setupProxyRequestMock(domain, url, ProxyBase.IGNORE_CACHE_PARAM, "1",
-        Param.FALLBACK_URL_PARAM.getKey(), fallback_url);
+    setupProxyRequestMock(domain, url, true, -1, null, fallback_url);
 
     HttpRequest req = new HttpRequest(Uri.parse(url)).setIgnoreCache(true);
     HttpResponse resp = HttpResponse.error();
@@ -199,9 +254,7 @@ public class ProxyHandlerTest extends ServletTestFixture {
     expect(pipeline.execute(isA(HttpRequest.class))).andReturn(fallback_resp);
 
     replay();
-
-    proxyHandler.fetch(request, recorder);
-
+    proxyHandler.fetch(request);
     verify();
   }
 
@@ -210,18 +263,89 @@ public class ProxyHandlerTest extends ServletTestFixture {
     String url = "http://example.org/file.evil";
     String domain = "example.org";
 
-    expect(lockedDomainService.isSafeForOpenProxy(domain)).andReturn(true).atLeastOnce();
-    setupProxyRequestMock(domain, url, ProxyBase.IGNORE_CACHE_PARAM, "1");
+    setupProxyRequestMock(domain, url, true, -1, null, null);
 
     HttpRequest req = new HttpRequest(Uri.parse(url)).setIgnoreCache(true);
     HttpResponse resp = new HttpResponse("Hello");
     expect(pipeline.execute(req)).andReturn(resp);
 
     replay();
+    proxyHandler.fetch(request);
+    verify();
+  }
 
-    proxyHandler.fetch(request, recorder);
+  // ProxyHandler throws INTERNAL_SERVER_ERRORS without isRecoverable() check.
+  @Test
+  public void testRecoverableRewritingException() throws Exception {
+    String url = "http://example.org/mypage.html";
+    String domain = "example.org";
+
+    setupProxyRequestMock(domain, url, true, -1, null, null);
+
+    String contentType = "text/html; charset=UTF-8";
+    HttpResponse resp = new HttpResponseBuilder()
+        .setResponseString("Hello")
+        .addHeader("Content-Type", contentType)
+        .create();
+
+    expect(pipeline.execute((HttpRequest) EasyMock.anyObject())).andReturn(resp);
+
+    replay();
+
+    final StringBuilder stringBuilder = new StringBuilder("");
+    ResponseRewriter rewriter = getResponseRewriterThatThrowsExceptions(stringBuilder);
+
+    ResponseRewriterRegistry rewriterRegistry =
+        new DefaultResponseRewriterRegistry(
+            Arrays.<ResponseRewriter>asList(rewriter), null);
+    ProxyHandler proxyHandler = new ProxyHandler(pipeline, rewriterRegistry, true);
+
+    request.setReturnOriginalContentOnError(true);
+    HttpResponse recorder = proxyHandler.fetch(request);
 
     verify();
+
+    // Ensure that original content is returned.
+    assertEquals(recorder.getHeader("Content-Type"), contentType);
+    assertEquals("Hello", recorder.getResponseAsString());
+    assertEquals("exceptionThrown", stringBuilder.toString());
+  }
+
+  @Test
+  public void testThrowExceptionIfReturnOriginalContentOnErrorNotSet()
+      throws Exception {
+    String url = "http://example.org/mypage.html";
+    String domain = "example.org";
+
+    setupProxyRequestMock(domain, url, true, -1, null, null);
+
+    String contentType = "text/html; charset=UTF-8";
+    HttpResponse resp = new HttpResponseBuilder()
+        .setResponseString("Hello")
+        .addHeader("Content-Type", contentType)
+        .create();
+
+    expect(pipeline.execute((HttpRequest) EasyMock.anyObject())).andReturn(resp);
+
+    replay();
+
+    final StringBuilder stringBuilder = new StringBuilder("");
+    ResponseRewriter rewriter = getResponseRewriterThatThrowsExceptions(stringBuilder);
+
+    ResponseRewriterRegistry rewriterRegistry =
+        new DefaultResponseRewriterRegistry(
+            Arrays.<ResponseRewriter>asList(rewriter), null);
+    ProxyHandler proxyHandler = new ProxyHandler(pipeline, rewriterRegistry, true);
+
+    boolean exceptionCaught = false;
+    try {
+      proxyHandler.fetch(request);
+    } catch (GadgetException e) {
+      exceptionCaught = true;
+      assertEquals(404, e.getHttpStatusCode());
+    }
+    assertTrue(exceptionCaught);
+    assertEquals("exceptionThrown", stringBuilder.toString());
   }
 
   /**
@@ -234,13 +358,20 @@ public class ProxyHandlerTest extends ServletTestFixture {
 
     @Override
     public boolean equals(Object obj) {
-      if (obj instanceof HttpRequest) {
-        HttpRequest req = (HttpRequest)obj;
-        if (req.getCacheTtl() != getCacheTtl() || req.getIgnoreCache() != getIgnoreCache()) {
-          return false;
-        }
+      if (obj == this) {
+        return true;
       }
-      return super.equals(obj);
+      if (!(obj instanceof HttpRequest)) {
+        return false;
+      }
+      HttpRequest req = (HttpRequest)obj;
+      return super.equals(obj) && req.getCacheTtl() == getCacheTtl() &&
+              req.getIgnoreCache() == getIgnoreCache();
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(super.hashCode(), getCacheTtl(), getIgnoreCache());
     }
   }
 
@@ -249,17 +380,14 @@ public class ProxyHandlerTest extends ServletTestFixture {
     String url = "http://example.org/file.evil";
     String domain = "example.org";
 
-    expect(lockedDomainService.isSafeForOpenProxy(domain)).andReturn(true).atLeastOnce();
-    setupProxyRequestMock(domain, url, ProxyBase.REFRESH_PARAM, "120");
-
+    setupProxyRequestMock(domain, url, false, 120, null, null);
+    
     HttpRequest req = new HttpRequestCache(Uri.parse(url)).setCacheTtl(120).setIgnoreCache(false);
     HttpResponse resp = new HttpResponse("Hello");
     expect(pipeline.execute(req)).andReturn(resp);
 
     replay();
-
-    proxyHandler.fetch(request, recorder);
-
+    proxyHandler.fetch(request);
     verify();
   }
 
@@ -268,52 +396,25 @@ public class ProxyHandlerTest extends ServletTestFixture {
     String url = "http://example.org/file.evil";
     String domain = "example.org";
 
-    expect(lockedDomainService.isSafeForOpenProxy(domain)).andReturn(true).atLeastOnce();
-    setupProxyRequestMock(domain, url, ProxyBase.REFRESH_PARAM, "foo");
-
+    setupProxyRequestMock(domain, url, false, -1, null, null);
+    
     HttpRequest req = new HttpRequestCache(Uri.parse(url)).setCacheTtl(-1).setIgnoreCache(false);
     HttpResponse resp = new HttpResponse("Hello");
     expect(pipeline.execute(req)).andReturn(resp);
 
     replay();
-
-    proxyHandler.fetch(request, recorder);
-
-    verify();
-  }
-
-  @Test
-  public void testXForwardedFor() throws Exception {
-    String url = "http://example.org/";
-    String domain = "example.org";
-
-    expect(lockedDomainService.isSafeForOpenProxy(domain)).andReturn(true).atLeastOnce();
-    expect(request.getRemoteAddr()).andReturn("127.0.0.1").atLeastOnce();
-    setupProxyRequestMock(domain, url);
-
-    HttpRequest req = new HttpRequest(Uri.parse(url));
-    req.setHeader("X-Forwarded-For","127.0.0.1");
-
-    HttpResponse resp = new HttpResponse("Hello");
-
-    expect(pipeline.execute(req)).andReturn(resp);
-
-    replay();
-
-    proxyHandler.fetch(request, recorder);
-
+    proxyHandler.fetch(request);
     verify();
   }
 
   private void expectMime(String expectedMime, String contentMime, String outputMime)
       throws Exception {
-    String url = "http://example.org/file.img?" + ProxyHandler.REWRITE_MIME_TYPE_PARAM +
+    String url = "http://example.org/file.img?" + Param.REWRITE_MIME_TYPE.getKey() +
         '=' + expectedMime;
     String domain = "example.org";
 
-    expect(lockedDomainService.isSafeForOpenProxy(domain)).andReturn(true).atLeastOnce();
-    setupProxyRequestMock(domain, url, ProxyHandler.REWRITE_MIME_TYPE_PARAM, expectedMime);
-
+    setupProxyRequestMock(domain, url, false, -1, expectedMime, null);
+    
     HttpRequest req = new HttpRequest(Uri.parse(url))
         .setRewriteMimeType(expectedMime);
 
@@ -323,31 +424,33 @@ public class ProxyHandlerTest extends ServletTestFixture {
       .create();
 
     expect(pipeline.execute(req)).andReturn(resp);
+    
     replay();
-    proxyHandler.fetch(request, recorder);
+    HttpResponse response = proxyHandler.fetch(request);
     verify();
-    assertEquals(recorder.getContentType(), outputMime);
+    
+    assertEquals(outputMime, response.getHeader("Content-Type"));
     reset();
   }
 
   @Test
   public void testMimeMatchPass() throws Exception {
-    expectMime("text/css", "text/css", "text/css");
+    expectMime("text/css", "text/css", "text/css; charset=UTF-8");
   }
 
   @Test
   public void testMimeMatchPassWithAdditionalAttributes() throws Exception {
-    expectMime("text/css", "text/css; charset=UTF-8", "text/css");
+    expectMime("text/css", "text/css", "text/css; charset=UTF-8");
   }
 
   @Test
   public void testMimeMatchOverrideNonMatch() throws Exception {
-    expectMime("text/css", "image/png; charset=UTF-8", "text/css");
+    expectMime("text/css", "image/png", "text/css; charset=UTF-8");
   }
 
   @Test
   public void testMimeMatchVarySupport() throws Exception {
     // We use CaptureRewrite which always rewrite - always set encoding
-    expectMime("image/*", "image/gif", "image/gif; charset=UTF-8");
+    expectMime("image/*", "image/gif", "image/gif");
   }
 }

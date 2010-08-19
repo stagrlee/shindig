@@ -18,7 +18,7 @@
 package org.apache.shindig.social.core.util.atom;
 
 import org.apache.shindig.social.opensocial.model.Activity;
-import com.google.common.base.Preconditions;
+import com.google.common.base.Objects;
 
 /**
  * This represents atom:entry/atom:source for the Activity object.
@@ -35,10 +35,6 @@ public class AtomSource {
    */
   public AtomSource(Activity activity) {
     title = activity.getStreamTitle();
-    link = new AtomLink("self", firstNonNull(activity.getStreamUrl(), "urn:bogus"));
-  }
-
-  private static <T> T firstNonNull(T first, T second) {
-    return first != null ? first : Preconditions.checkNotNull(second);
+    link = new AtomLink("self", Objects.firstNonNull(activity.getStreamUrl(), "urn:bogus"));
   }
 }

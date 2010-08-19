@@ -69,13 +69,14 @@ public class SocialApiTestsGuiceModule extends AbstractModule {
         BeanJsonConverter.class);
 
     bind(new TypeLiteral<Set<Object>>(){}).annotatedWith(
-        Names.named("org.apache.shindig.social.handlers"))
+        Names.named("org.apache.shindig.handlers"))
         .toInstance(ImmutableSet.<Object>of(ActivityHandler.class, AppDataHandler.class,
             PersonHandler.class, MessageHandler.class));
 
-    bind(String.class).annotatedWith(
-        Names.named("shindig.containers.default"))
-        .toInstance("res://containers/default/container.js");
+    bindConstant().annotatedWith(Names.named("shindig.containers.default"))
+        .to("res://containers/default/container.js");
+    bindConstant().annotatedWith(Names.named("shindig.port")).to("8080");
+    bindConstant().annotatedWith(Names.named("shindig.host")).to("localhost");
     bind(ContainerConfig.class).to(JsonContainerConfig.class);
     
     bind(Integer.class).annotatedWith(

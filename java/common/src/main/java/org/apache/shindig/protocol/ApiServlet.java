@@ -20,6 +20,7 @@ package org.apache.shindig.protocol;
 import org.apache.shindig.auth.AuthInfo;
 import org.apache.shindig.auth.SecurityToken;
 import org.apache.shindig.common.servlet.InjectedServlet;
+import org.apache.shindig.config.ContainerConfig;
 import org.apache.shindig.protocol.conversion.BeanConverter;
 import org.apache.shindig.protocol.conversion.BeanJsonConverter;
 
@@ -47,7 +48,7 @@ import com.google.inject.name.Names;
  */
 public abstract class ApiServlet extends InjectedServlet {
 
-  private static final Logger logger = Logger.getLogger(ApiServlet.class.getName());
+  private static final Logger LOG = Logger.getLogger(ApiServlet.class.getName());
 
   protected static final String FORMAT_PARAM = "format";
   protected static final String JSON_FORMAT = "json";
@@ -67,9 +68,7 @@ public abstract class ApiServlet extends InjectedServlet {
   protected BeanJsonConverter jsonConverter;
   protected BeanConverter xmlConverter;
   protected BeanConverter atomConverter;
-
-  @Deprecated
-  protected boolean disallowUnknownContentTypes = true;
+  protected ContainerConfig containerConfig;
 
   @Override
   public void init(ServletConfig config) throws ServletException {
@@ -93,11 +92,11 @@ public abstract class ApiServlet extends InjectedServlet {
     this.dispatcher = dispatcher;
   }
 
-  @Inject(optional = true)
-  public void setDisallowUnknownContentTypes(
-      @Named("shindig.api.disallow-unknown-content-types") boolean disallowUnknownContentTypes) {
-    this.disallowUnknownContentTypes = disallowUnknownContentTypes;
+  @Inject
+  public void setContainerConfig(ContainerConfig containerConfig) {
+    this.containerConfig = containerConfig;
   }
+
 
   @Inject
   public void setBeanConverters(
@@ -140,10 +139,10 @@ public abstract class ApiServlet extends InjectedServlet {
   protected ResponseItem responseItemFromException(Throwable t) {
     if (t instanceof ProtocolException) {
       ProtocolException pe = (ProtocolException) t;
-      logger.log(Level.INFO, "Returning a response error as result of a protocol exception", pe);
+      LOG.log(Level.INFO, "Returning a response error as result of a protocol exception", pe);
       return new ResponseItem(pe.getCode(), pe.getMessage(), pe.getResponse());
     }
-    logger.log(Level.WARNING, "Returning a response error as result of an exception", t);
+    LOG.log(Level.WARNING, "Returning a response error as result of an exception", t);
     return new ResponseItem(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, t.getMessage());
   }
 
@@ -153,10 +152,5 @@ public abstract class ApiServlet extends InjectedServlet {
       servletRequest.setCharacterEncoding(DEFAULT_ENCODING);
     }
     servletResponse.setCharacterEncoding(DEFAULT_ENCODING);
-  }
-
-  public void checkContentTypes(Set<String> allowedContentTypes,
-      String contentType) throws ContentTypes.InvalidContentTypeException {
-    ContentTypes.checkContentTypes(allowedContentTypes, contentType, disallowUnknownContentTypes);
   }
 }

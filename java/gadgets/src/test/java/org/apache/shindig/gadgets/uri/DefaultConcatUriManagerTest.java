@@ -19,16 +19,15 @@
 package org.apache.shindig.gadgets.uri;
 
 import static org.apache.shindig.gadgets.uri.ConcatUriManager.ConcatUri.fromList;
-import static org.easymock.classextension.EasyMock.createMock;
-import static org.easymock.classextension.EasyMock.expect;
-import static org.easymock.classextension.EasyMock.eq;
-import static org.easymock.classextension.EasyMock.isA;
-import static org.easymock.classextension.EasyMock.replay;
+import static org.easymock.EasyMock.createMock;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.eq;
+import static org.easymock.EasyMock.isA;
+import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-import com.google.inject.internal.ImmutableList;
-
+import com.google.common.collect.ImmutableList;
 import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.shindig.config.ContainerConfig;
 import org.apache.shindig.common.uri.Uri;
@@ -187,12 +186,14 @@ public class DefaultConcatUriManagerTest extends UriManagerTestBase {
     manager.make(fromList(gadget, resourceUris, ConcatUriManager.Type.JS), false);
   }
   
-  @Test(expected = RuntimeException.class)
+  @Test
   public void typeJsMissingSplitTokenConfig() throws Exception {
     Gadget gadget = mockGadget(false, false);
     DefaultConcatUriManager manager = makeManager("host.com", "/foo", null, null);
     List<List<Uri>> resourceUris = ImmutableList.<List<Uri>>of(ImmutableList.of(RESOURCE_1));
-    manager.make(fromList(gadget, resourceUris, ConcatUriManager.Type.JS), false);
+    List<ConcatData> concatUris = manager.make(fromList(gadget, resourceUris, ConcatUriManager.Type.JS), false);
+    assertEquals(1, concatUris.size());
+    assertNull(concatUris.get(0).getUri().getQueryParameter(Param.JSON.getKey()));
   }
   
   @Test
@@ -204,7 +205,7 @@ public class DefaultConcatUriManagerTest extends UriManagerTestBase {
   @Test
   public void validateNoContainerStrict() {
     DefaultConcatUriManager manager = makeManager("host.com", "/path", null, null);
-    manager.setUseStrictParsing("true");
+    manager.setUseStrictParsing(true);
     ConcatUriManager.ConcatUri validated =
         manager.process(Uri.parse("http://host.com/path?q=f"));
     assertEquals(UriStatus.BAD_URI, validated.getStatus());
@@ -221,7 +222,7 @@ public class DefaultConcatUriManagerTest extends UriManagerTestBase {
   @Test
   public void validateHostMismatchStrict() {
     DefaultConcatUriManager manager = makeManager("host.com", "/path", null, null);
-    manager.setUseStrictParsing("true");
+    manager.setUseStrictParsing(true);
     ConcatUriManager.ConcatUri validated =
         manager.process(Uri.parse("http://another.com/path?" +
             Param.CONTAINER.getKey() + '=' + CONTAINER + "&type=css"));
@@ -231,7 +232,7 @@ public class DefaultConcatUriManagerTest extends UriManagerTestBase {
   @Test
   public void validatePathMismatchStrict() {
     DefaultConcatUriManager manager = makeManager("host.com", "/path", null, null);
-    manager.setUseStrictParsing("true");
+    manager.setUseStrictParsing(true);
     ConcatUriManager.ConcatUri validated =
         manager.process(Uri.parse("http://host.com/another?" +
             Param.CONTAINER.getKey() + '=' + CONTAINER + "&type=css"));
@@ -518,7 +519,7 @@ public class DefaultConcatUriManagerTest extends UriManagerTestBase {
   private ConcatUriManager.Versioner makeVersioner(UriStatus status, String... versions) {
     ConcatUriManager.Versioner versioner = createMock(ConcatUriManager.Versioner.class);
     expect(versioner.version(isA(List.class), eq(CONTAINER)))
-        .andReturn(ImmutableList.of(versions)).anyTimes();
+        .andReturn(ImmutableList.copyOf(versions)).anyTimes();
     expect(versioner.validate(isA(List.class), eq(CONTAINER), isA(String.class)))
         .andReturn(status).anyTimes();
     replay(versioner);

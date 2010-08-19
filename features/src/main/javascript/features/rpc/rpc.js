@@ -122,7 +122,7 @@ gadgets.rpc = function() {
                     gadgets.json.stringify(Array.prototype.slice.call(arguments)) +
                     "): call ignored. [caller: " + document.location +
                     ", isChild: " + isChild + "]");
-      }
+      };
     }
     return {
       getCode: function() {
@@ -134,7 +134,7 @@ gadgets.rpc = function() {
       init: logFn("init"),
       setup: logFn("setup"),
       call: logFn("call")
-    }
+    };
   })();
 
   // Load the authentication token for speaking to the container
@@ -782,8 +782,12 @@ gadgets.rpc = function() {
     getRelayUrl: function(targetId) {
       var url = relayUrl[targetId];
       // Some RPC methods (wpm, for one) are unhappy with schemeless URLs.
-      if (url && url.indexOf('//') == 0) {
-        url = document.location.protocol + url;
+      if (url && url.substring(0,1) === '/') {
+        if (url.substring(1,2) === '/') {    // starts with '//'
+          url = document.location.protocol + url;
+        } else {    // relative URL, starts with '/'
+          url = document.location.protocol + '//' + document.location.host + url;
+        }
       }
       
       return url;

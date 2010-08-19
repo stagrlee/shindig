@@ -23,6 +23,9 @@ import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
 
+import org.apache.shindig.auth.SecurityToken;
+import org.apache.shindig.auth.SecurityTokenCodec;
+import org.apache.shindig.auth.SecurityTokenException;
 import org.apache.shindig.common.uri.Uri;
 import org.apache.shindig.common.uri.UriBuilder;
 import org.apache.shindig.config.ContainerConfig;
@@ -53,13 +56,18 @@ public class DefaultIframeUriManager implements IframeUriManager {
   
   private final ContainerConfig config;
   private final LockedDomainPrefixGenerator ldGen;
+  private final SecurityTokenCodec securityTokenCodec;
+
   private final List<String> ldSuffixes;
-  
+
   @Inject
   public DefaultIframeUriManager(ContainerConfig config,
-                                 LockedDomainPrefixGenerator ldGen) {
+                                 LockedDomainPrefixGenerator ldGen,
+                                 SecurityTokenCodec securityTokenCodec) {
     this.config = config;
     this.ldGen = ldGen;
+    this.securityTokenCodec = securityTokenCodec;
+    
     Collection<String> containers = config.getContainers();
     List<String> ldSuffixes = Lists.newArrayListWithCapacity(containers.size());
     for (String container : containers) {
@@ -131,7 +139,7 @@ public class DefaultIframeUriManager implements IframeUriManager {
     
     // Add all UserPrefs
     UserPrefs prefs = context.getUserPrefs();
-    for (UserPref up : gadget.getSpec().getUserPrefs()) {
+    for (UserPref up : gadget.getSpec().getUserPrefs().values()) {
       String name = up.getName();
       String data = prefs.getPref(name);
       if (data == null) {
@@ -141,23 +149,43 @@ public class DefaultIframeUriManager implements IframeUriManager {
       boolean upInFragment = !view.needsUserPrefSubstitution();
       addParam(uri, UriCommon.USER_PREF_PREFIX + up.getName(), data, useTpl, upInFragment);
     }
-    
+
     if (versioner != null) {
       // Added on the query string, obviously not templated.
       addParam(uri, Param.VERSION.getKey(),
           versioner.version(gadget.getSpec().getUrl(), container), false, false);
     }
     
-    if (gadget.getAllFeatures().contains(SECURITY_TOKEN_FEATURE_NAME) ||
-        config.getBool(container, SECURITY_TOKEN_ALWAYS_KEY)) {
+    if (wantsSecurityToken(gadget)) {
       boolean securityTokenOnQuery = isTokenNeededForRendering(gadget);
-      String securityToken = null;  // Always templated at the moment, can ignore.
-      addParam(uri, Param.SECURITY_TOKEN.getKey(), securityToken, true, !securityTokenOnQuery);
+      
+      String securityToken = generateSecurityToken(gadget);
+      addParam(uri, Param.SECURITY_TOKEN.getKey(), securityToken, securityToken == null,
+          !securityTokenOnQuery);
     }
     
     addExtras(uri);
     
     return uri.toUri();
+  }
+
+  protected String generateSecurityToken(Gadget gadget) {
+    // Find a security token in the context
+    try {
+      SecurityToken token = gadget.getContext().getToken();
+
+      if (securityTokenCodec != null && token != null) {
+        return securityTokenCodec.encodeToken(token);
+      }
+    } catch (SecurityTokenException e) {
+      // ignore -- no security token
+    }
+    return null;
+  }
+
+  protected boolean wantsSecurityToken(Gadget gadget) {
+    return gadget.getAllFeatures().contains(SECURITY_TOKEN_FEATURE_NAME) ||
+           config.getBool(gadget.getContext().getContainer(), SECURITY_TOKEN_ALWAYS_KEY);
   }
   
   // This method should be overridden to provide better caching characteristics
@@ -223,7 +251,7 @@ public class DefaultIframeUriManager implements IframeUriManager {
     return versioner.validate(gadgetUri, container, version);
   }
   
-  public static final String tplKey(String key) {
+  public static String tplKey(String key) {
     return '%' + key + '%';
   }
   

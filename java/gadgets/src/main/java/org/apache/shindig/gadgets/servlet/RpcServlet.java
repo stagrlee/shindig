@@ -18,14 +18,17 @@
  */
 package org.apache.shindig.gadgets.servlet;
 
+import com.google.common.base.Preconditions;
 import org.apache.commons.io.IOUtils;
+import org.apache.shindig.common.servlet.HttpUtil;
 import org.apache.shindig.common.servlet.InjectedServlet;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import com.google.inject.Inject;
 
-import javax.servlet.ServletInputStream;
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
@@ -34,25 +37,30 @@ import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 
 /**
  * Handles RPC metadata requests.
  */
 public class RpcServlet extends InjectedServlet {
+  
+  private static final long serialVersionUID = 1382573217773582182L;
+  
   static final String GET_REQUEST_REQ_PARAM = "req";
   static final String GET_REQUEST_CALLBACK_PARAM = "callback";
-  // Starts with alpha or underscore, followed by alphanum, underscore or period
-  static final Pattern GET_REQUEST_CALLBACK_PATTERN = Pattern.compile("[A-Za-z_][A-Za-z0-9_\\.]+");
 
-  private static final int POST_REQUEST_MAX_SIZE = 1024 * 128;
-  private static final Logger logger = Logger.getLogger("org.apache.shindig.gadgets");
+  private static final Logger LOG = Logger.getLogger("org.apache.shindig.gadgets");
 
-  private JsonRpcHandler jsonHandler;
+  private transient JsonRpcHandler jsonHandler;
 
   @Inject
   public void setJsonRpcHandler(JsonRpcHandler jsonHandler) {
+    checkInitialized();
     this.jsonHandler = jsonHandler;
+  }
+
+  @Override
+  public void init(ServletConfig config) throws ServletException {
+    super.init(config);
   }
 
   @Override
@@ -62,17 +70,12 @@ public class RpcServlet extends InjectedServlet {
     String callbackValue;
 
     try {
+      HttpUtil.isJSONP(request);
       reqValue = validateParameterValue(request, GET_REQUEST_REQ_PARAM);
       callbackValue = validateParameterValue(request, GET_REQUEST_CALLBACK_PARAM);
-      if (!GET_REQUEST_CALLBACK_PATTERN.matcher(callbackValue).matches()) {
-        throw new IllegalArgumentException("Wrong format for parameter '" +
-            GET_REQUEST_CALLBACK_PARAM + "' specified. Expected: " +
-            GET_REQUEST_CALLBACK_PATTERN.toString());
-      }
-
     } catch (IllegalArgumentException e) {
       response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-      logger.log(Level.INFO, e.getMessage(), e);
+      LOG.log(Level.INFO, e.getMessage(), e);
       return;
     }
 
@@ -93,7 +96,7 @@ public class RpcServlet extends InjectedServlet {
       response.getWriter().write(result.getOutput());
     } catch (UnsupportedEncodingException e) {
       response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-      logger.log(Level.INFO, e.getMessage(), e);
+      LOG.log(Level.INFO, e.getMessage(), e);
       response.getWriter().write("Unsupported input character set");
     }
   }
@@ -101,9 +104,7 @@ public class RpcServlet extends InjectedServlet {
   private String validateParameterValue(HttpServletRequest request, String parameter)
       throws IllegalArgumentException {
     String result = request.getParameter(parameter);
-    if (result == null) {
-      throw new IllegalArgumentException("No parameter '" + parameter + "' specified.");
-    }
+    Preconditions.checkArgument(result != null, "No parameter '%s' specified", parameter);
     return result;
   }
 
@@ -120,7 +121,7 @@ public class RpcServlet extends InjectedServlet {
       return new Result("Malformed JSON request.", false);
     } catch (RpcException e) {
       response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-      logger.log(Level.INFO, e.getMessage(), e);
+      LOG.log(Level.INFO, e.getMessage(), e);
       return new Result(e.getMessage(), false);
     }
   }
@@ -150,5 +151,4 @@ public class RpcServlet extends InjectedServlet {
       return success;
     }
   }
-
 }

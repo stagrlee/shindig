@@ -46,6 +46,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Logger;
 import java.util.logging.Level;
+import java.util.regex.Pattern;
+
+import javax.annotation.Nullable;
 
 import javax.el.ELContext;
 import javax.el.ELException;
@@ -73,15 +76,31 @@ public class JsonContainerConfig extends AbstractContainerConfig {
   private final Map<String, Map<String, Object>> config;
   private final Expressions expressions;
 
+  private static final Pattern CRLF_PATTERN = Pattern.compile("[\r\n]+");
+
+  // Used by tests
+  public JsonContainerConfig(String containers, Expressions expressions) throws ContainerConfigException {
+    this(containers, "localhost", "8080", expressions);
+  }
   /**
    * Creates a new configuration from files.
    * @throws ContainerConfigException
    */
   @Inject
-  public JsonContainerConfig(@Named("shindig.containers.default") String containers, Expressions expressions)
+  public JsonContainerConfig(@Named("shindig.containers.default") String containers,
+                             @Nullable @Named("shindig.host") String host,
+                             @Nullable @Named("shindig.port") String port,
+                             Expressions expressions)
       throws ContainerConfigException {
     this.expressions = expressions;
-    config = createContainers(loadContainers(containers));
+    JSONObject configJson = loadContainers(containers);
+    try {
+      configJson.getJSONObject(ContainerConfig.DEFAULT_CONTAINER).put("SERVER_PORT", port);
+      configJson.getJSONObject(ContainerConfig.DEFAULT_CONTAINER).put("SERVER_HOST", host);
+    } catch (JSONException e) {
+      // ignore
+    }
+    config = createContainers(configJson);
     init();
   }
 
@@ -104,7 +123,7 @@ public class JsonContainerConfig extends AbstractContainerConfig {
       configEntry.setValue(value);
     }
   }
-  
+
   @Override
   public Collection<String> getContainers() {
     return Collections.unmodifiableSet(config.keySet());
@@ -253,7 +272,7 @@ public class JsonContainerConfig extends AbstractContainerConfig {
    * @param base The base object that values will be replaced into.
    * @param merge The object to merge values from.
    *
-   * @throws JSONException if the two objects can't be merged for some reason.
+   * @throws org.json.JSONException if the two objects can't be merged for some reason.
    */
   private JSONObject mergeObjects(JSONObject base, JSONObject merge)
       throws JSONException {
@@ -345,7 +364,7 @@ public class JsonContainerConfig extends AbstractContainerConfig {
           location = location.substring(6);
           LOG.info("Loading resources from: " + location);
           if (path.endsWith(".txt")) {
-            loadResources(ResourceLoader.getContent(location).split("[\r\n]+"), all);
+            loadResources(CRLF_PATTERN.split(ResourceLoader.getContent(location)), all);
           } else {
             loadResources(new String[]{location}, all);
           }
@@ -374,7 +393,7 @@ public class JsonContainerConfig extends AbstractContainerConfig {
   public String toString() {
     return JsonSerializer.serialize(config);
   }
-  
+
   private Object evaluateAll(Object value) {
     if (value instanceof CharSequence) {
       return value.toString();
@@ -384,14 +403,14 @@ public class JsonContainerConfig extends AbstractContainerConfig {
       for (Map.Entry<?, ?> entry : mapValue.entrySet()) {
         newMap.put(entry.getKey(), evaluateAll(entry.getValue()));
       }
-      
+
       return newMap.build();
     } else if (value instanceof List<?>) {
-      ImmutableList.Builder<Object> newList = ImmutableList.builder(); 
+      ImmutableList.Builder<Object> newList = ImmutableList.builder();
       for (Object entry : (List<?>) value) {
         newList.add(evaluateAll(entry));
       }
-      
+
       return newList.build();
     } else {
       return value;

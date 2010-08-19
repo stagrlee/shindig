@@ -77,6 +77,23 @@ $shindigConfig = array(
   'default_js_prefix' => '/gadgets/js/',
   'default_iframe_prefix' => '/gadgets/ifr?',
 
+ 'servlet_map' => array( 
+   '/container' => 'FilesServlet', 
+   '/samplecontainer' => 'FilesServlet', 
+   '/gadgets/js' => 'JsServlet', 
+   '/gadgets/proxy' => 'ProxyServlet', 
+   '/gadgets/makeRequest' => 'MakeRequestServlet', 
+   '/gadgets/ifr' => 'GadgetRenderingServlet', 
+   '/gadgets/metadata' => 'MetadataServlet', 
+   '/gadgets/oauthcallback' => 'OAuthCallbackServlet', 
+   '/gadgets/api/rpc' => 'JsonRpcServlet', 
+   '/gadgets/api/rest' => 'DataServiceServlet', 
+   '/social/rest' => 'DataServiceServlet', 
+   '/rpc' => 'JsonRpcServlet', 
+   '/public.crt' => 'CertServlet', 
+   '/public.cer' => 'CertServlet', 
+ ), 
+ 
   // The X-XRDS-Location value for your implementing container, see http://code.google.com/p/partuza/source/browse/trunk/Library/XRDS.php for an example
   'xrds_location' => '',
 
@@ -97,9 +114,12 @@ $shindigConfig = array(
 
   // The locations of the various required components on disk. If you did a normal svn checkout there's no need to change these
   'base_path' => realpath(dirname(__FILE__) . '/..') . '/',
-  'features_path' => realpath(dirname(__FILE__) . '/../../features/src/main/javascript/features') . '/',
+  'features_path' => array(
+    realpath(dirname(__FILE__) . '/../../features/src/main/javascript/features') . '/',
+    realpath(dirname(__FILE__) . '/../../extras/src/main/javascript/features-extras') . '/',
+  ),
   'container_path' => realpath(dirname(__FILE__) . '/../../config') . '/',
-  'javascript_path' => realpath(dirname(__FILE__) . '/../../javascript') . '/',
+  'javascript_path' => realpath(dirname(__FILE__) . '/../../content') . '/',
 
   // The OAuth SSL certificates to use, and the pass phrase for the private key
   'private_key_file' => realpath(dirname(__FILE__) . '/../certs') . '/private.key',
@@ -107,7 +127,7 @@ $shindigConfig = array(
   'private_key_phrase' => 'partuza',
 
   // the path to the json db file, used only if your using the JsonDbOpensocialService example/demo service
-  'jsondb_path' => realpath(dirname(__FILE__) . '/../../javascript/sampledata') . '/canonicaldb.json',
+  'jsondb_path' => realpath(dirname(__FILE__) . '/../../content/sampledata') . '/canonicaldb.json',
 
   // Force these libraries to be external (included through <script src="..."> tags), this way they could be cached by the browser
   'forcedJsLibs' => '',
@@ -125,6 +145,17 @@ $shindigConfig = array(
   'oauth_lookup_service' => 'BasicOAuthLookupService',
   // The OAuth Store is used to store the (gadgets/)oauth proxy credentials it obtained on behalf of the user/gadget combo
   'oauth_store' => 'BasicOAuthStore',
+
+  'gadget_class' => 'Gadget',
+  'gadget_context_class' => 'GadgetContext',
+  'gadget_factory_class' => 'GadgetFactory',
+  'gadget_spec_parser' => 'GadgetSpecParser',
+  'gadget_spec_class' => 'GadgetSpec',
+  'substitution_class' => 'Substitutions',
+  'proxy_handler' => 'ProxyHandler',
+  'makerequest_handler' => 'MakeRequestHandler',
+  'makerequest_class' => 'MakeRequest',
+  'container_config_class' => 'ContainerConfig',
 
   // Caching back-end's to use. Shindig ships with CacheStorageFile, CacheStorageApc and CacheStorageMemcache support
   // The data cache is primarily used for remote content (proxied files, gadget spec, etc)

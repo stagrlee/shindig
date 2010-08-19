@@ -17,20 +17,15 @@
  */
 package org.apache.shindig.social.sample;
 
-import org.apache.shindig.social.core.config.SocialApiGuiceModule;
 import org.apache.shindig.social.opensocial.oauth.OAuthDataStore;
 import org.apache.shindig.social.opensocial.spi.ActivityService;
 import org.apache.shindig.social.opensocial.spi.AppDataService;
 import org.apache.shindig.social.opensocial.spi.MessageService;
 import org.apache.shindig.social.opensocial.spi.PersonService;
 import org.apache.shindig.social.sample.oauth.SampleOAuthDataStore;
-import org.apache.shindig.social.sample.oauth.SampleRealm;
-import org.apache.shindig.social.sample.service.SampleContainerHandler;
 import org.apache.shindig.social.sample.spi.JsonDbOpensocialService;
 
-import java.util.Set;
-
-import com.google.common.collect.ImmutableSet;
+import com.google.inject.AbstractModule;
 import com.google.inject.name.Names;
 
 /**
@@ -39,12 +34,10 @@ import com.google.inject.name.Names;
  * but does provide a good overview of the pieces of Shindig that require
  * custom container implementations.
  */
-public class SampleModule extends SocialApiGuiceModule {
+public class SampleModule extends AbstractModule {
 
   @Override
   protected void configure() {
-    super.configure();
-    
     bind(String.class).annotatedWith(Names.named("shindig.canonical.json.db"))
         .toInstance("sampledata/canonicaldb.json");
     bind(ActivityService.class).to(JsonDbOpensocialService.class);
@@ -53,18 +46,5 @@ public class SampleModule extends SocialApiGuiceModule {
     bind(MessageService.class).to(JsonDbOpensocialService.class);
     
     bind(OAuthDataStore.class).to(SampleOAuthDataStore.class);
-
-
-    // We do this so that jsecurity realms can get access to the jsondbservice singleton
-    requestStaticInjection(SampleRealm.class);
   }
-
-  @Override
-  protected Set<Object> getHandlers() {
-    ImmutableSet.Builder<Object> handlers = ImmutableSet.builder();
-    handlers.addAll(super.getHandlers());
-    handlers.add(SampleContainerHandler.class);
-    return handlers.build();
-  }
-
 }

@@ -24,7 +24,7 @@ import org.apache.shindig.common.testing.FakeGadgetToken;
 import org.apache.shindig.common.uri.Uri;
 import org.apache.shindig.gadgets.AuthType;
 import org.apache.shindig.gadgets.oauth.OAuthArguments;
-import org.apache.shindig.gadgets.rewrite.image.NoOpImageRewriter;
+import org.apache.shindig.gadgets.rewrite.DefaultResponseRewriterRegistry;
 import org.easymock.EasyMock;
 import org.easymock.IMocksControl;
 import org.junit.Assert;
@@ -68,8 +68,6 @@ public class DefaultInvalidationServiceTest extends Assert {
     appyToken.setOwnerId("OwnerY");
     appyToken.setViewerId("ViewerY");
 
-    control = EasyMock.createNiceControl();
-
     signedRequest = new HttpRequest(URI);
     signedRequest.setAuthType(AuthType.SIGNED);
     signedRequest.setSecurityToken(appxToken);
@@ -80,8 +78,9 @@ public class DefaultInvalidationServiceTest extends Assert {
 
     fetcher = new DefaultRequestPipelineTest.FakeHttpFetcher();
     oauth = new DefaultRequestPipelineTest.FakeOAuthRequestProvider();
-    requestPipeline = new DefaultRequestPipeline(fetcher, cache, oauth, new NoOpImageRewriter(),
-        service, new HttpResponseMetadataHelper());
+    requestPipeline = new DefaultRequestPipeline(fetcher, cache, oauth,
+        new DefaultResponseRewriterRegistry(null, null), service,
+        new HttpResponseMetadataHelper());
   }
 
   @Test

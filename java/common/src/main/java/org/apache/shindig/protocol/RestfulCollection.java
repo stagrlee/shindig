@@ -44,15 +44,6 @@ public class RestfulCollection<T> {
   }
 
   /**
-   * @deprecated As of 1.1-BETA4 use {@link #RestfulCollection(java.util.List, int, int, int)} with the extra itemsPerPage Argument
-   * This contructor will be removed in 1.1 RC1
-   */
-  @Deprecated
-  public RestfulCollection(List<T> entry, int startIndex, int totalResults) {
-    this(entry, startIndex, totalResults, entry.size());
-  }
-
-  /**
    * Create a paginated collection response.
    *
    * @param entry paginated entries
@@ -69,6 +60,14 @@ public class RestfulCollection<T> {
     this.itemsPerPage = Math.min(itemsPerPage, totalResults);
   }
 
+  /**
+   * Helper constructor for un-paged collection, 
+   * Use {@link #RestfulCollection(java.util.List, int, int, int)} in paginated context
+   */
+  public RestfulCollection(List<T> entry, int startIndex, int totalResults) {
+    this(entry, startIndex, totalResults, entry.size());
+  }
+  
   public List<T> getEntry() {
     return entry;
   }

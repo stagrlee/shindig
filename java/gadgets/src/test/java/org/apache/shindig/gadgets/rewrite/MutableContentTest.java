@@ -18,7 +18,10 @@
  */
 package org.apache.shindig.gadgets.rewrite;
 
+import com.google.common.base.Charsets;
+import org.apache.commons.io.IOUtils;
 import org.apache.shindig.common.PropertiesModule;
+import org.apache.shindig.common.util.CharsetUtil;
 import org.apache.shindig.gadgets.parse.GadgetHtmlParser;
 import org.apache.shindig.gadgets.parse.ParseModule;
 
@@ -32,6 +35,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
+
+import java.io.InputStream;
+import java.util.Arrays;
 
 public class MutableContentTest {
   private MutableContent mhc;
@@ -53,22 +59,55 @@ public class MutableContentTest {
     assertEquals(content, document.getFirstChild().getChildNodes().item(1).getTextContent());
 
     assertSame(content, mhc.getContent());
+    assertTrue(Arrays.equals(
+        content.getBytes("UTF8"), IOUtils.toByteArray(mhc.getContentBytes())));
     assertSame(document, mhc.getDocument());
     assertEquals(0, mhc.getNumChanges());
   }
 
   @Test
-  public void modifyContentReflectedInTree() throws Exception {
+  public void modifyContentReflectedInTreeAndBytes() throws Exception {
     assertEquals(0, mhc.getNumChanges());
     mhc.setContent("NEW CONTENT");
     assertEquals(1, mhc.getNumChanges());
+    assertEquals("NEW CONTENT", new String(IOUtils.toByteArray(mhc.getContentBytes()), "UTF8"));
     Document document = mhc.getDocument();
     assertEquals(1, document.getChildNodes().getLength());
     assertEquals("NEW CONTENT", document.getChildNodes().item(0).getTextContent());
     mhc.documentChanged();
     assertEquals(2, mhc.getNumChanges());
   }
+  
+  @Test
+  public void modifyContentReflectedInTreeUtf8() throws Exception {
+    String theContent = "N\uFFFDW C\uFFFDNT\uFFFDNT";
 
+    assertEquals(0, mhc.getNumChanges());
+    mhc.setContent(theContent);
+    assertEquals(1, mhc.getNumChanges());
+    assertEquals(theContent, new String(IOUtils.toByteArray(mhc.getContentBytes()), "UTF8"));
+    Document document = mhc.getDocument();
+    assertEquals(1, document.getChildNodes().getLength());
+    assertEquals(theContent, document.getChildNodes().item(0).getTextContent());
+    mhc.documentChanged();
+    assertEquals(2, mhc.getNumChanges());
+  }
+  
+  @Test
+  public void modifyBytesReflectedInContentAndTree() throws Exception {
+    assertEquals(0, mhc.getNumChanges());
+    mhc.setContentBytes("NEW CONTENT".getBytes("UTF8"), Charsets.UTF_8);
+    assertEquals(1, mhc.getNumChanges());
+    Document document = mhc.getDocument();
+    assertEquals(1, document.getChildNodes().getLength());
+    assertEquals("NEW CONTENT", document.getChildNodes().item(0).getTextContent());
+    assertEquals("NEW CONTENT", mhc.getContent());
+    assertEquals(1, mhc.getNumChanges());
+    InputStream is = mhc.getContentBytes();
+    assertEquals("NEW CONTENT", new String(IOUtils.toByteArray(is), "UTF8"));
+    assertEquals(1, mhc.getNumChanges());
+  }
+  
   @Test
   public void modifyTreeReflectedInContent() throws Exception {
     Document document = mhc.getDocument();
@@ -85,6 +124,7 @@ public class MutableContentTest {
     MutableContent.notifyEdit(document);
     assertEquals(2, mhc.getNumChanges());
     assertTrue(mhc.getContent().contains("BAR CONTENT"));
+    assertTrue(new String(IOUtils.toByteArray(mhc.getContentBytes()), "UTF8").contains("BAR CONTENT"));
 
     // GadgetHtmlNode hasn't changed because string hasn't changed
     assertSame(document, mhc.getDocument());

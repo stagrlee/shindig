@@ -55,17 +55,17 @@ public class OAuthService {
         continue;
       }
       String childName = child.getNodeName();
-      if (childName.equals("Request")) {
+      if ("Request".equals(childName)) {
         if (requestUrl != null) {
           throw new SpecParserException("Multiple OAuth/Service/Request elements");
         }
         requestUrl = parseEndPoint("OAuth/Service/Request", (Element)child, base);
-      } else if (childName.equals("Authorization")) {
+      } else if ("Authorization".equals(childName)) {
         if (authorizationUrl != null) {
           throw new SpecParserException("Multiple OAuth/Service/Authorization elements");
         }
         authorizationUrl = parseAuthorizationUrl((Element)child, base);
-      } else if (childName.equals("Access")) {
+      } else if ("Access".equals(childName)) {
         if (accessUrl != null) {
           throw new SpecParserException("Multiple OAuth/Service/Access elements");
         }
@@ -207,7 +207,7 @@ public class OAuthService {
   }
 
   Uri parseAuthorizationUrl(Element child, Uri base) throws SpecParserException {
-    Uri url = XmlUtil.getHttpUriAttribute(child, URL_ATTR);
+    Uri url = XmlUtil.getHttpUriAttribute(child, URL_ATTR, base);
     if (url == null) {
       throw new SpecParserException("OAuth/Service/Authorization @url is not valid: " +
           child.getAttribute(URL_ATTR));
@@ -217,7 +217,7 @@ public class OAuthService {
 
 
   EndPoint parseEndPoint(String where, Element child, Uri base) throws SpecParserException {
-    Uri url = XmlUtil.getHttpUriAttribute(child, URL_ATTR);
+    Uri url = XmlUtil.getHttpUriAttribute(child, URL_ATTR, base);
     if (url == null) {
       throw new SpecParserException("Not an HTTP url: " + child.getAttribute(URL_ATTR));
     }

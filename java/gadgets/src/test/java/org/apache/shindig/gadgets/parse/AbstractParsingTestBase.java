@@ -43,18 +43,16 @@ public abstract class AbstractParsingTestBase {
   protected String loadFile(String path) throws IOException {
     InputStream is = this.getClass().getClassLoader().getResourceAsStream(path);
     // ENABLE THIS if you have troubles in your IDE loading resources.
-    /*
-    if (is == null) {
-      is = new FileInputStream(new File("/shindig/base/java/gadgets/src/test/resources/" + path));
-    }
-    */
+    /*if (is == null) {
+      is = new FileInputStream(new File("/path/to/your/files/" + path));
+    }*/
     return IOUtils.toString(is);
   }
 
   protected void parseAndCompareBalanced(String content, String expected, GadgetHtmlParser parser)
       throws Exception {
     Document document = parser.parseDom(content);
-    expected = StringUtils.replace(expected, EOL, "\n");
+    expected = expected.replace(EOL, "\n");
     String serialized = HtmlSerialization.serialize(document);
     assertHtmlEquals(expected, serialized);
   }

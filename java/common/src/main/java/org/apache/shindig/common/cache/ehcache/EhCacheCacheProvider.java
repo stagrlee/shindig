@@ -18,6 +18,7 @@
  */
 package org.apache.shindig.common.cache.ehcache;
 
+import com.google.common.base.Preconditions;
 import org.apache.shindig.common.cache.Cache;
 import org.apache.shindig.common.cache.CacheProvider;
 import org.apache.shindig.common.util.ResourceLoader;
@@ -35,12 +36,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.util.Map;
+import java.util.concurrent.ConcurrentMap;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class EhCacheCacheProvider implements CacheProvider {
-  private final Logger LOG = Logger.getLogger(EhCacheCacheProvider.class.getName());
+  private static final Logger LOG = Logger.getLogger(EhCacheCacheProvider.class.getName());
   private final CacheManager cacheManager;
-  private final Map<String, Cache<?, ?>> caches = new MapMaker().makeMap();
+  private final ConcurrentMap<String, Cache<?, ?>> caches = new MapMaker().makeMap();
 
   @Inject
   public EhCacheCacheProvider(@Named("shindig.cache.ehcache.config") String configPath,
@@ -52,7 +55,7 @@ public class EhCacheCacheProvider implements CacheProvider {
   }
 
   /**
-   * Read the cache conifuration from the specified resource.
+   * Read the cache configuration from the specified resource.
    * This function is intended to be overrideable to allow for programmatic
    * cache configuration.
    * @param configPath
@@ -96,18 +99,12 @@ public class EhCacheCacheProvider implements CacheProvider {
 
   @SuppressWarnings("unchecked")
   public <K, V> Cache<K, V> createCache(String name) {
-    if (name == null) {
-      LOG.info("Creating anonymous cache");
-      return new EhConfiguredCache<K, V>(name, cacheManager);
-    } else {
-      Cache<K, V> cache = (Cache<K, V>) caches.get(name);
-      if (cache == null) {
-        LOG.info("Creating cache named " + name);
-        cache = new EhConfiguredCache<K, V>(name, cacheManager);
-        caches.put(name, cache);
+    if (!caches.containsKey(Preconditions.checkNotNull(name))) {
+      if (LOG.isLoggable(Level.FINE)) {
+        LOG.fine("Creating cache named " + name);
       }
-      return cache;
+      caches.putIfAbsent(name, new EhConfiguredCache<K, V>(name, cacheManager));
     }
+    return (Cache<K, V>) caches.get(Preconditions.checkNotNull(name));
   }
-
 }

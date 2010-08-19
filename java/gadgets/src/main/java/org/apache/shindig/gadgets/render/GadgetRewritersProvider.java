@@ -24,7 +24,6 @@ import com.google.inject.name.Named;
 
 import org.apache.shindig.gadgets.GadgetContext;
 import org.apache.shindig.gadgets.rewrite.GadgetRewriter;
-import org.apache.shindig.gadgets.servlet.HtmlAccelServlet;
 
 import java.util.List;
 
@@ -34,23 +33,15 @@ import java.util.List;
  *
  */
 public class GadgetRewritersProvider {
-
   private final List<GadgetRewriter> renderRewriters;
-  private final List<GadgetRewriter> accelRewriters;
-  
+
   @Inject
   public GadgetRewritersProvider(
-      @Named("shindig.rewriters.gadget") List<GadgetRewriter> renderRewriters,
-      @Named("shindig.rewriters.accelerate") List<GadgetRewriter> accelRewriters) {
+      @Named("shindig.rewriters.gadget") List<GadgetRewriter> renderRewriters) {
     this.renderRewriters = renderRewriters;
-    this.accelRewriters = accelRewriters;
   }
 
   public List<GadgetRewriter> getRewriters(GadgetContext context) {
-    if (HtmlAccelServlet.isAccel(context)) {
-      return accelRewriters;
-    }
     return renderRewriters;
   }
-  
 }

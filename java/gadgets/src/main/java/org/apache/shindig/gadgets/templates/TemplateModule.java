@@ -18,6 +18,9 @@
  */
 package org.apache.shindig.gadgets.templates;
 
+import com.google.inject.AbstractModule;
+import com.google.inject.multibindings.Multibinder;
+
 import org.apache.shindig.gadgets.templates.tags.FlashTagHandler;
 import org.apache.shindig.gadgets.templates.tags.HtmlTagHandler;
 import org.apache.shindig.gadgets.templates.tags.IfTagHandler;
@@ -26,43 +29,26 @@ import org.apache.shindig.gadgets.templates.tags.RepeatTagHandler;
 import org.apache.shindig.gadgets.templates.tags.TagHandler;
 import org.apache.shindig.gadgets.templates.tags.VariableTagHandler;
 
-import com.google.common.collect.ImmutableSet;
-import com.google.inject.AbstractModule;
-import com.google.inject.Inject;
-import com.google.inject.Provider;
-import com.google.inject.TypeLiteral;
-
-import java.util.Set;
-
 /**
- * Guice Module to provide Template-specific classes 
+ * Guice Module to provide Template-specific classes
  */
 public class TemplateModule extends AbstractModule {
 
   @Override
   protected void configure() {
     bind(TemplateProcessor.class).to(DefaultTemplateProcessor.class);
-    // TODO: switch to Guice multibindings when that JAR becomes available
-    // in a Maven repository
-    bind(new TypeLiteral<Set<TagHandler>>(){}).toProvider(TagHandlersProvider.class); 
+    bindTagHandlers();
   }
-   
-  public static class TagHandlersProvider implements Provider<Set<TagHandler>> {
-    
-    private final Set<TagHandler> handlers;
-    
-    @Inject
-    public TagHandlersProvider(HtmlTagHandler htmlHandler, 
-        IfTagHandler ifHandler, RepeatTagHandler repeatHandler, 
-        RenderTagHandler renderHandler, FlashTagHandler flashHandler,
-        VariableTagHandler variableHandler) {
-      handlers = ImmutableSet.of((TagHandler) htmlHandler, ifHandler,
-          repeatHandler, renderHandler, flashHandler,
-          variableHandler);
-    }
-    
-    public Set<TagHandler> get() {
-      return handlers;
-    }
+
+  /* No need to subclass. 
+     You can add the same construct in your own modules to register your own tag handler.. */
+  protected void bindTagHandlers() {
+    Multibinder<TagHandler> tagBinder = Multibinder.newSetBinder(binder(), TagHandler.class);
+    tagBinder.addBinding().to(HtmlTagHandler.class);
+    tagBinder.addBinding().to(IfTagHandler.class);
+    tagBinder.addBinding().to(RenderTagHandler.class);
+    tagBinder.addBinding().to(RepeatTagHandler.class);
+    tagBinder.addBinding().to(FlashTagHandler.class);
+    tagBinder.addBinding().to(VariableTagHandler.class);
   }
 }

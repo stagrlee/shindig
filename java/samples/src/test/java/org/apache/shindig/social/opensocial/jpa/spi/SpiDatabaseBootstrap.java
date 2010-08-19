@@ -58,7 +58,6 @@ import java.util.Map;
 import javax.persistence.EntityManager;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.MapMaker;
 import com.google.inject.Inject;
 
@@ -199,7 +198,7 @@ public class SpiDatabaseBootstrap {
     }
     
     // Delete all data
-    entityManager.createNativeQuery("delete from FriendDb where 1 > 0").executeUpdate();
+    entityManager.createNativeQuery("delete from friend where 1 > 0").executeUpdate();
     entityManager.createNativeQuery("delete from activity_media where 1 > 0").executeUpdate();
     entityManager.createNativeQuery("delete from url where 1 > 0").executeUpdate();
     entityManager.createNativeQuery("delete from template_params where 1 > 0").executeUpdate();
@@ -384,7 +383,7 @@ public class SpiDatabaseBootstrap {
     
     List<ListField> emails = new ArrayList<ListField>();
     EmailDb email = new EmailDb();
-    email.setValue("shindig-dev@incubator.apache.org");
+    email.setValue("dev@shindig.apache.org");
     email.setType("work");
     emails.add(email);
     person.setEmails(emails);
@@ -414,7 +413,7 @@ public class SpiDatabaseBootstrap {
     organization1.setStartDate(buildDate("1995-01-01"));
     organization1.setSubField("Development");
     organization1.setTitle("Grand PooBah");
-    organization1.setWebpage("http://incubator.apache.org/projects/shindig.html");
+    organization1.setWebpage("http://shindig.apache.org/");
     organization1.setType("job");
     
     PersonOrganizationDb organization2 = new PersonOrganizationDb();

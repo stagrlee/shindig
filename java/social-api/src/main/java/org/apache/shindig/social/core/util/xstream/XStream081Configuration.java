@@ -17,6 +17,12 @@
  */
 package org.apache.shindig.social.core.util.xstream;
 
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.apache.shindig.protocol.DataCollection;
 import org.apache.shindig.protocol.RestfulCollection;
 import org.apache.shindig.protocol.conversion.xstream.ClassFieldMapping;
@@ -52,6 +58,7 @@ import org.apache.shindig.social.opensocial.model.Organization;
 import org.apache.shindig.social.opensocial.model.Person;
 import org.apache.shindig.social.opensocial.model.Url;
 
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ForwardingMap;
 import com.google.common.collect.ImmutableList;
@@ -68,12 +75,6 @@ import com.thoughtworks.xstream.converters.reflection.ReflectionProvider;
 import com.thoughtworks.xstream.io.HierarchicalStreamDriver;
 import com.thoughtworks.xstream.mapper.AttributeMapper;
 import com.thoughtworks.xstream.mapper.Mapper;
-
-import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Opensocial 0.81 compliant Xstream binding
@@ -135,6 +136,7 @@ public class XStream081Configuration implements XStreamConfiguration {
         .put("feed", atom)
         .put("person", os)
         .put("activity", os)
+        .put("activityStream", os)
         .put("account", os)
         .put("address", os)
         .put("bodyType", os)
@@ -154,6 +156,7 @@ public class XStream081Configuration implements XStreamConfiguration {
         new ClassFieldMapping("content", AtomContent.class),
 
         new ClassFieldMapping("activity", Activity.class),
+//  AS TODO      new ClassFieldMapping("activityStream", ActivityStream.class),
         new ClassFieldMapping("account", Account.class),
         new ClassFieldMapping("address", Address.class),
         new ClassFieldMapping("bodyType", BodyType.class),
@@ -188,6 +191,7 @@ public class XStream081Configuration implements XStreamConfiguration {
         new ClassFieldMapping("content", AtomContent.class),
 
         new ClassFieldMapping("activity", Activity.class),
+// AS TODO        new ClassFieldMapping("activityStream", ActivityStream.class),
         new ClassFieldMapping("account", Account.class),
         new ClassFieldMapping("address", Address.class),
         new ClassFieldMapping("bodyType", BodyType.class),
@@ -223,6 +227,7 @@ public class XStream081Configuration implements XStreamConfiguration {
         .put("map", ConcurrentHashMap.class)
         .put("appdata", DataCollection.class)
         .put("activity", Activity.class)
+// AS TODO        .put("activityStream", ActivityStream.class)
         .put("account", Account.class)
         .put("address", Address.class)
         .put("bodyType", BodyType.class)
@@ -291,7 +296,7 @@ public class XStream081Configuration implements XStreamConfiguration {
   }
 
   private static Multimap<String, Class<?>> getOmitMap(ConverterSet c) {
-    return firstNonNull(omitMap.get(c), omitMap.get(ConverterSet.DEFAULT));
+    return Objects.firstNonNull(omitMap.get(c), omitMap.get(ConverterSet.DEFAULT));
   }
 
 
@@ -359,6 +364,7 @@ public class XStream081Configuration implements XStreamConfiguration {
     final K defaultval;
 
     public DefaultedEnumMap(Class<K> clz, K defaultkey) {
+      super();
       this.backing = new EnumMap<K,V>(Preconditions.checkNotNull(clz));
       this.defaultval = Preconditions.checkNotNull(defaultkey);
     }
@@ -371,16 +377,12 @@ public class XStream081Configuration implements XStreamConfiguration {
     @SuppressWarnings("unchecked")
     public V get(Object o) {
       K key = (K)o;
-      return firstNonNull(backing.get(key), backing.get(defaultval));
+      return Objects.firstNonNull(backing.get(key), backing.get(defaultval));
     }
 
     @Override
     protected Map<K,V> delegate() {
       return backing;
     }
-  }
-
-  public static <T> T firstNonNull(T first, T second) {
-    return first != null ? first : Preconditions.checkNotNull(second);
   }
 }

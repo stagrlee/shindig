@@ -17,19 +17,21 @@
  */
 package org.apache.shindig.gadgets.variables;
 
+import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.shindig.gadgets.GadgetContext;
 import org.apache.shindig.gadgets.UserPrefs;
 import org.apache.shindig.gadgets.spec.GadgetSpec;
 import org.apache.shindig.gadgets.spec.UserPref;
 
-import org.apache.commons.lang.StringEscapeUtils;
-
 /**
  * Substitutes user prefs into the spec.
  */
-public class UserPrefSubstituter {
-  public static void addSubstitutions(Substitutions substituter,
-      GadgetSpec spec, UserPrefs values) {
-    for (UserPref pref : spec.getUserPrefs()) {
+public class UserPrefSubstituter implements Substituter {
+
+  public void addSubstitutions(Substitutions substituter, GadgetContext context, GadgetSpec spec) {
+    UserPrefs values = context.getUserPrefs();
+    
+    for (UserPref pref : spec.getUserPrefs().values()) {
       String name = pref.getName();
       String value = values.getPref(name);
       if (value == null) {
@@ -38,8 +40,8 @@ public class UserPrefSubstituter {
           value = "";
         }
       }
-      substituter.addSubstitution(Substitutions.Type.USER_PREF, name,
-          StringEscapeUtils.escapeHtml(value));
+      substituter.addSubstitution(Substitutions.Type.USER_PREF, name, StringEscapeUtils
+            .escapeHtml(value));
     }
   }
 }

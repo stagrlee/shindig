@@ -23,14 +23,12 @@ import org.apache.commons.lang.StringUtils;
 import com.google.common.collect.ImmutableSet;
 
 import java.util.Set;
-import java.util.logging.Logger;
 
 /**
  * Common mime content types and utilities
  */
-public class ContentTypes {
-
-  private static final Logger logger = Logger.getLogger(ContentTypes.class.getName());
+public final class ContentTypes {
+  private ContentTypes() {}
 
   /**
    * Allowed alternatives to application/json, including types listed
@@ -83,17 +81,12 @@ public class ContentTypes {
   }
 
   public static void checkContentTypes(Set<String> allowedContentTypes,
-      String contentType, boolean disallowUnknownContentTypes) throws InvalidContentTypeException {
+      String contentType) throws InvalidContentTypeException {
 
     if (StringUtils.isEmpty(contentType)) {
-       if (disallowUnknownContentTypes) {
-        throw new InvalidContentTypeException(
-            "No Content-Type specified. One of "
-                + StringUtils.join(allowedContentTypes, ", ") + " is required");
-       } else {
-         // No content type specified, we can fail in other ways later.
-         return;
-       }
+      throw new InvalidContentTypeException(
+          "No Content-Type specified. One of "
+              + StringUtils.join(allowedContentTypes, ", ") + " is required");
     }
 
     contentType = ContentTypes.extractMimePart(contentType);
@@ -105,20 +98,12 @@ public class ContentTypes {
     if (allowedContentTypes.contains(contentType)) {
       return;
     }
-    if (disallowUnknownContentTypes) {
-      throw new InvalidContentTypeException(
-          "Unsupported Content-Type "
-              + contentType
-              + ". One of "
-              + StringUtils.join(allowedContentTypes, ", ")
-              + " is required");
-    } else {
-      logger.warning("Unsupported Content-Type "
-          + contentType
-          + ". One of "
-          + StringUtils.join(allowedContentTypes, ", ")
-          + " is expected");
-    }
+    throw new InvalidContentTypeException(
+        "Unsupported Content-Type "
+            + contentType
+            + ". One of "
+            + StringUtils.join(allowedContentTypes, ", ")
+            + " is required");
   }
 
   public static class InvalidContentTypeException extends Exception {

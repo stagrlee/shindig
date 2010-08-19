@@ -32,7 +32,7 @@ import org.apache.shindig.gadgets.Gadget;
 import org.apache.shindig.gadgets.GadgetContext;
 import org.apache.shindig.gadgets.GadgetException;
 import org.apache.shindig.gadgets.MessageBundleFactory;
-import org.apache.shindig.gadgets.parse.GadgetHtmlParser;
+import org.apache.shindig.gadgets.parse.SocialDataTags;
 import org.apache.shindig.gadgets.render.SanitizingGadgetRewriter;
 import org.apache.shindig.gadgets.spec.Feature;
 import org.apache.shindig.gadgets.spec.MessageBundle;
@@ -52,7 +52,6 @@ import org.apache.shindig.gadgets.templates.tags.TemplateBasedTagHandler;
 import org.w3c.dom.DocumentFragment;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -85,7 +84,7 @@ public class TemplateRewriter implements GadgetRewriter {
   /** Enable client support? **/
   static final String CLIENT_SUPPORT_PARAM = "client";
 
-  private static final Logger logger = Logger.getLogger(TemplateRewriter.class.getName());
+  private static final Logger LOG = Logger.getLogger(TemplateRewriter.class.getName());
   
   /**
    * Provider of the processor.  TemplateRewriters are stateless and multithreaded,
@@ -115,14 +114,14 @@ public class TemplateRewriter implements GadgetRewriter {
     Map<String, Feature> directFeatures = gadget.getSpec().getModulePrefs()
         .getFeatures();
 
-    Feature f = directFeatures.get(TEMPLATES_FEATURE_NAME);
-    if (f == null && directFeatures.containsKey(OSML_FEATURE_NAME)) {
-      f = directFeatures.get(OSML_FEATURE_NAME);
+    Feature feature = directFeatures.get(TEMPLATES_FEATURE_NAME);
+    if (feature == null && directFeatures.containsKey(OSML_FEATURE_NAME)) {
+      feature = directFeatures.get(OSML_FEATURE_NAME);
     }
     
-    if (f != null && isServerTemplatingEnabled(f)) {
+    if (feature != null && isServerTemplatingEnabled(feature)) {
       try {
-        rewriteImpl(gadget, f, content);
+        rewriteImpl(gadget, feature, content);
       } catch (GadgetException ge) {
         throw new RewritingException(ge, ge.getHttpStatusCode());
       }
@@ -135,11 +134,11 @@ public class TemplateRewriter implements GadgetRewriter {
    *   &lt;Param name="disableAutoProcessing"&gt;true&lt;/Param&gt;
    * </pre>
    */
-  private boolean isServerTemplatingEnabled(Feature f) {
-    return (!"true".equalsIgnoreCase(f.getParam(DISABLE_AUTO_PROCESSING_PARAM)));
+  private boolean isServerTemplatingEnabled(Feature feature) {
+    return (!"true".equalsIgnoreCase(feature.getParam(DISABLE_AUTO_PROCESSING_PARAM)));
   }
 
-  private void rewriteImpl(Gadget gadget, Feature f, MutableContent content)
+  private void rewriteImpl(Gadget gadget, Feature feature, MutableContent content)
       throws GadgetException {   
     List<TagRegistry> registries = Lists.newArrayList();
     List<TemplateLibrary> libraries = Lists.newArrayList();
@@ -155,20 +154,16 @@ public class TemplateRewriter implements GadgetRewriter {
     registries.add(osmlLibrary.getTagRegistry());
     libraries.add(osmlLibrary);
 
-    NodeList templateElements = content.getDocument()
-        .getElementsByTagName(GadgetHtmlParser.OSML_TEMPLATE_TAG);
-    ImmutableList.Builder<Element> builder = ImmutableList.builder();
-    for (int i = 0; i < templateElements.getLength(); i++) {
-      builder.add((Element) templateElements.item(i));
-    }
-    List<Element> templates = builder.build();
+    List<Element> templateElements = SocialDataTags.getTags(content.getDocument(),
+        SocialDataTags.OSML_TEMPLATE_TAG);
+    List<Element> templates = ImmutableList.copyOf(templateElements);
 
-    if (!OSML_FEATURE_NAME.equals(f.getName())) {
+    if (!OSML_FEATURE_NAME.equals(feature.getName())) {
       // User-defined custom tags - Priority 3
       registries.add(registerCustomTags(templates));
 
       // User-defined libraries - Priority 4
-      loadTemplateLibraries(gadget.getContext(), f, registries, libraries);
+      loadTemplateLibraries(gadget.getContext(), feature, registries, libraries);
     }
     
     TagRegistry registry = new CompositeTagRegistry(registries);
@@ -178,7 +173,7 @@ public class TemplateRewriter implements GadgetRewriter {
 
     // Check if a feature param overrides  our guess at whether the client-side    
     // feature is needed.                                                  
-    String clientOverride = f.getParam(CLIENT_SUPPORT_PARAM);            
+    String clientOverride = feature.getParam(CLIENT_SUPPORT_PARAM);            
     if ("true".equalsIgnoreCase(clientOverride)) {                              
       needsFeature = true;                                                      
     } else if ("false".equalsIgnoreCase(clientOverride)) {                      
@@ -230,8 +225,8 @@ public class TemplateRewriter implements GadgetRewriter {
   }
 
   private void loadTemplateLibraries(GadgetContext context,
-      Feature f, List<TagRegistry> registries, List<TemplateLibrary> libraries)  throws GadgetException {
-    Collection<String> urls = f.getParams().get(REQUIRE_LIBRARY_PARAM); 
+      Feature feature, List<TagRegistry> registries, List<TemplateLibrary> libraries)  throws GadgetException {
+    Collection<String> urls = feature.getParams().get(REQUIRE_LIBRARY_PARAM); 
     if (urls != null) {
       for (String url : urls) {
         Uri uri = Uri.parse(url.trim());
@@ -243,7 +238,7 @@ public class TemplateRewriter implements GadgetRewriter {
           libraries.add(library);
         } catch (TemplateParserException te) {
           // Suppress exceptions due to malformed template libraries
-          logger.log(Level.WARNING, null, te);
+          LOG.log(Level.WARNING, null, te);
         }
       }
     }

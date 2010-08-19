@@ -18,11 +18,11 @@
  */
 package org.apache.shindig.gadgets.render;
 
-import static org.easymock.classextension.EasyMock.createMock;
-import static org.easymock.classextension.EasyMock.capture;
-import static org.easymock.classextension.EasyMock.expect;
-import static org.easymock.classextension.EasyMock.replay;
-import static org.easymock.classextension.EasyMock.verify;
+import static org.easymock.EasyMock.createMock;
+import static org.easymock.EasyMock.capture;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -30,9 +30,9 @@ import static org.junit.Assert.assertSame;
 
 import org.apache.shindig.common.uri.Uri;
 import org.apache.shindig.common.uri.UriBuilder;
-import org.apache.shindig.gadgets.servlet.ProxyBase;
 import org.apache.shindig.gadgets.uri.ProxyUriManager;
 import org.apache.shindig.gadgets.uri.ProxyUriManager.ProxyUri;
+import org.apache.shindig.gadgets.uri.UriCommon.Param;
 import org.easymock.Capture;
 
 import org.junit.Before;
@@ -86,8 +86,8 @@ public class SanitizingProxyUriManagerTest {
     assertSame(uriCapture.getValue(), input);
     assertSame(intCapture.getValue(), refresh);
     assertEquals(1, returned.size());
-    assertEquals("1", returned.get(0).getQueryParameter(ProxyBase.SANITIZE_CONTENT_PARAM));
-    assertNull(returned.get(0).getQueryParameter(ProxyBase.REWRITE_MIME_TYPE_PARAM));
+    assertEquals("1", returned.get(0).getQueryParameter(Param.SANITIZE.getKey()));
+    assertNull(returned.get(0).getQueryParameter(Param.REWRITE_MIME_TYPE.getKey()));
   }
   
   @Test
@@ -109,8 +109,8 @@ public class SanitizingProxyUriManagerTest {
     assertSame(uriCapture.getValue(), input);
     assertSame(intCapture.getValue(), refresh);
     assertEquals(1, returned.size());
-    assertEquals("1", returned.get(0).getQueryParameter(ProxyBase.SANITIZE_CONTENT_PARAM));
-    assertEquals(mime, returned.get(0).getQueryParameter(ProxyBase.REWRITE_MIME_TYPE_PARAM));
+    assertEquals("1", returned.get(0).getQueryParameter(Param.SANITIZE.getKey()));
+    assertEquals(mime, returned.get(0).getQueryParameter(Param.REWRITE_MIME_TYPE.getKey()));
   }
   
   @Test
@@ -133,10 +133,10 @@ public class SanitizingProxyUriManagerTest {
     assertSame(uriCapture.getValue(), input);
     assertSame(intCapture.getValue(), refresh);
     assertEquals(2, returned.size());
-    assertEquals("1", returned.get(0).getQueryParameter(ProxyBase.SANITIZE_CONTENT_PARAM));
-    assertEquals(mime, returned.get(0).getQueryParameter(ProxyBase.REWRITE_MIME_TYPE_PARAM));
-    assertEquals("1", returned.get(1).getQueryParameter(ProxyBase.SANITIZE_CONTENT_PARAM));
-    assertEquals(mime, returned.get(1).getQueryParameter(ProxyBase.REWRITE_MIME_TYPE_PARAM));
+    assertEquals("1", returned.get(0).getQueryParameter(Param.SANITIZE.getKey()));
+    assertEquals(mime, returned.get(0).getQueryParameter(Param.REWRITE_MIME_TYPE.getKey()));
+    assertEquals("1", returned.get(1).getQueryParameter(Param.SANITIZE.getKey()));
+    assertEquals(mime, returned.get(1).getQueryParameter(Param.REWRITE_MIME_TYPE.getKey()));
   }
   
   private SanitizingProxyUriManager makeRewriter(String mime) {

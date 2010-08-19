@@ -40,6 +40,7 @@ import java.util.Set;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.AbstractModule;
 import com.google.inject.TypeLiteral;
+import com.google.inject.multibindings.Multibinder;
 import com.google.inject.name.Names;
 
 /**
@@ -70,18 +71,18 @@ public class SocialApiGuiceModule extends AbstractModule {
     bind(new TypeLiteral<List<AuthenticationHandler>>(){}).toProvider(
         AuthenticationHandlerProvider.class);
 
-    bind(new TypeLiteral<Set<Object>>(){}).annotatedWith(Names.named("org.apache.shindig.social.handlers"))
-        .toInstance(getHandlers());
-
-    bind(Long.class).annotatedWith(Names.named("org.apache.shindig.serviceExpirationDurationMinutes")).toInstance(60L);
+    Multibinder<Object> handlerBinder = Multibinder.newSetBinder(binder(), Object.class, Names.named("org.apache.shindig.handlers"));
+    for (Class handler : getHandlers()) {
+      handlerBinder.addBinding().toInstance(handler);
+    }
   }
 
   /**
    * Hook to provide a Set of request handlers.  Subclasses may override
    * to add or replace additional handlers.
    */
-  protected Set<Object> getHandlers() {
-    return ImmutableSet.<Object>of(ActivityHandler.class, AppDataHandler.class,
+  protected Set<Class<?>> getHandlers() {
+    return ImmutableSet.<Class<?>>of(ActivityHandler.class, AppDataHandler.class,
         PersonHandler.class, MessageHandler.class);
   }
 }

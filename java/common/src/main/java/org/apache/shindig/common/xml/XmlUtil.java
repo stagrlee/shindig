@@ -41,7 +41,7 @@ import javax.xml.parsers.ParserConfigurationException;
  * Utility class for simplifying parsing of xml documents. Documents are not validated, and
  * loading of external files (xinclude, external entities, DTDs, etc.) are disabled.
  */
-public class XmlUtil {
+public final class XmlUtil {
   private static final Logger LOG = Logger.getLogger(XmlUtil.class.getName());
   // Handles xml errors so that they're not logged to stderr.
   private static final ErrorHandler errorHandler = new ErrorHandler() {
@@ -194,14 +194,18 @@ public class XmlUtil {
    * or https URI.
    * @param node
    * @param attr
-   * @param def
-   * @return the parsed uri, or def if the attribute is not a valid http or
+   * @param base
+   *@param def  @return the parsed uri, or def if the attribute is not a valid http or
    * https URI.
    */
-  public static Uri getHttpUriAttribute(Node node, String attr, Uri def) {
+  public static Uri getHttpUriAttribute(Node node, String attr, Uri base, Uri def) {
     Uri uri = getUriAttribute(node, attr, def);
     if (uri == null) {
       return def;
+    }
+    // resolve to base before checking
+    if (base != null) {
+      uri = base.resolve(uri);
     }
     if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) {
       return def;
@@ -213,11 +217,12 @@ public class XmlUtil {
    * Retrieves an attribute as a URI, and verifies that the URI is an http or https URI.
    * @param node
    * @param attr
+   * @param base
    * @return the parsed uri, or null if the attribute is not a valid http or
    * https URI.
    */
-  public static Uri getHttpUriAttribute(Node node, String attr) {
-    return getHttpUriAttribute(node, attr, null);
+  public static Uri getHttpUriAttribute(Node node, String attr, Uri base) {
+    return getHttpUriAttribute(node, attr, base, null);
   }
 
   /**

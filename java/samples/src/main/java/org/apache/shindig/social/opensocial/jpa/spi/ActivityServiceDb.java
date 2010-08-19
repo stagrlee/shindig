@@ -197,7 +197,9 @@ public class ActivityServiceDb implements ActivityService {
 
     // all of the above could equally have been placed into a thread to overlay the
     // db wait times.
-    return ImmediateFuture.newInstance(new RestfulCollection<Activity>(plist, options.getFirst(), totalResults.intValue()));
+    RestfulCollection<Activity> restCollection = new RestfulCollection<Activity>(
+        plist, options.getFirst(), totalResults.intValue(), options.getMax());
+    return ImmediateFuture.newInstance(restCollection);
   }
   
   /* (non-Javadoc)
@@ -241,7 +243,7 @@ public class ActivityServiceDb implements ActivityService {
     q.setFirstResult(0);
     q.setMaxResults(1);
     List<?> activities = q.getResultList();
-    if ( activities != null && activities.size() > 0 ) {
+    if ( activities != null && !activities.isEmpty()) {
       return (Activity) activities.get(0);
     }
     return null;

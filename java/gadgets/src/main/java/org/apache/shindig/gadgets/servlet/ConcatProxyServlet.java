@@ -19,37 +19,48 @@
 package org.apache.shindig.gadgets.servlet;
 
 import com.google.inject.Inject;
+import com.google.inject.name.Named;
 
 import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.shindig.common.servlet.HttpUtil;
 import org.apache.shindig.common.servlet.InjectedServlet;
+import org.apache.shindig.common.Pair;
+import org.apache.shindig.common.Pairs;
 import org.apache.shindig.common.uri.Uri;
 import org.apache.shindig.common.uri.UriBuilder;
 import org.apache.shindig.gadgets.GadgetException;
 import org.apache.shindig.gadgets.http.HttpRequest;
 import org.apache.shindig.gadgets.http.HttpResponse;
 import org.apache.shindig.gadgets.http.RequestPipeline;
-import org.apache.shindig.gadgets.rewrite.RequestRewriterRegistry;
+import org.apache.shindig.gadgets.rewrite.ResponseRewriterRegistry;
 import org.apache.shindig.gadgets.rewrite.RewritingException;
 import org.apache.shindig.gadgets.uri.ConcatUriManager;
 import org.apache.shindig.gadgets.uri.UriCommon.Param;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.FutureTask;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletException;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 /**
  * Servlet which concatenates the content of several proxied HTTP responses
- *
- * @see org.apache.shindig.gadgets.rewrite.old.HTMLContentRewriter
  */
 public class ConcatProxyServlet extends InjectedServlet {
+
+  private static final long serialVersionUID = -4390212150673709895L;
 
   public static final String JSON_PARAM = Param.JSON.getKey();
   private static final Pattern JSON_PARAM_PATTERN = Pattern.compile("^\\w*$");
@@ -58,26 +69,49 @@ public class ConcatProxyServlet extends InjectedServlet {
   static final Integer LONG_LIVED_REFRESH = (365 * 24 * 60 * 60);  // 1 year
   static final Integer DEFAULT_REFRESH = (60 * 60);                // 1 hour
 
-  private static final Logger logger
+  private static final Logger LOG 
       = Logger.getLogger(ConcatProxyServlet.class.getName());
+  
+  private transient RequestPipeline requestPipeline;
+  private transient ConcatUriManager concatUriManager;
+  private transient ResponseRewriterRegistry contentRewriterRegistry;
 
-  private RequestPipeline requestPipeline;
-  private ConcatUriManager concatUriManager;
-  private RequestRewriterRegistry contentRewriterRegistry;
+  private transient Executor executor = new Executor() {
+    public void execute(Runnable r) {
+      // Sequential version of 'execute' by default.
+      r.run();
+    }
+  };
 
   @Inject
   public void setRequestPipeline(RequestPipeline requestPipeline) {
+    checkInitialized();
     this.requestPipeline = requestPipeline;
   }
   
   @Inject
   public void setConcatUriManager(ConcatUriManager concatUriManager) {
+    checkInitialized();
     this.concatUriManager = concatUriManager;
   }
 
   @Inject
-  public void setContentRewriterRegistry(RequestRewriterRegistry contentRewriterRegistry) {
+  public void setContentRewriterRegistry(ResponseRewriterRegistry contentRewriterRegistry) {
+    checkInitialized();
     this.contentRewriterRegistry = contentRewriterRegistry;
+  }
+  
+  @Inject
+  public void setExecutor(@Named("shindig.concat.executor") Executor executor) {
+    checkInitialized();
+    // Executor is independently named to allow separate configuration of
+    // concat fetch parallelism and other Shindig job execution.
+    this.executor = executor;
+  }
+
+  @Override
+  public void init(ServletConfig config) throws ServletException {
+    super.init(config);
   }
 
   @SuppressWarnings("boxing")
@@ -110,6 +144,21 @@ public class ConcatProxyServlet extends InjectedServlet {
     response.setHeader("Content-Type", concatType.getMimeType() + "; charset=UTF8");
     response.setHeader("Content-Disposition", "attachment;filename=p.txt");
 
+    if (doFetchConcatResources(response, concatUri)) {
+      response.setStatus(HttpResponse.SC_OK);
+    } else {
+      response.setStatus(HttpResponse.SC_BAD_REQUEST);
+    }
+  }
+
+  /**
+   * @param response HttpservletResponse.
+   * @param concatUri URI representing the concatenated list of resources requested.
+   * @return false for cases where concat resources could not be fetched, true for success cases.
+   * @throws IOException
+   */
+  private boolean doFetchConcatResources(HttpServletResponse response,
+      ConcatUriManager.ConcatUri concatUri) throws IOException {
     // Check for json concat and set output stream.
     ConcatOutputStream cos = null;
     
@@ -122,38 +171,77 @@ public class ConcatProxyServlet extends InjectedServlet {
         response.getOutputStream().println(
             formatHttpError(HttpServletResponse.SC_BAD_REQUEST,
                 "Bad json variable name " + jsonVar, null));
-        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-        return;
+        return false;
       }
     } else {
       // Standard concat output mode.
       cos = new VerbatimConcatOutputStream(response.getOutputStream());
     }
 
-    for (Uri resourceUri : concatUri.getBatch()) {
-      try {
-        HttpRequest httpReq = concatUri.makeHttpRequest(resourceUri);
-        HttpResponse httpResp = requestPipeline.execute(httpReq);
-        if (contentRewriterRegistry != null) {
-          try {
-            httpResp = contentRewriterRegistry.rewriteHttpResponse(httpReq, httpResp);
-          } catch (RewritingException e) {
-            throw new GadgetException(GadgetException.Code.INTERNAL_SERVER_ERROR, e,
-                e.getHttpStatusCode());
+    List<Pair<Uri, FutureTask<RequestContext>>> futureTasks =
+        new ArrayList<Pair<Uri, FutureTask<RequestContext>>>();
+
+    try {
+      for (Uri resourceUri : concatUri.getBatch()) {
+        try {
+          HttpRequest httpReq = concatUri.makeHttpRequest(resourceUri);
+          FutureTask<RequestContext> httpFetcher =
+                  new FutureTask<RequestContext>(new HttpFetchCallable(httpReq));
+          futureTasks.add(Pairs.newPair(httpReq.getUri(), httpFetcher));
+          executor.execute(httpFetcher);
+        } catch (GadgetException ge) {
+          if (cos.outputError(resourceUri, ge)) {
+            // True returned from outputError indicates a terminal error.
+            return false;
           }
         }
-        cos.output(resourceUri, httpResp);
-      } catch (GadgetException ge) {
-        response.setStatus(HttpResponse.SC_BAD_REQUEST);
-        if (cos.outputError(resourceUri, ge)) {
-          // True returned from outputError indicates a terminal error.
-          return;
+      }
+
+      for (Pair<Uri, FutureTask<RequestContext>> futureTask : futureTasks) {
+        RequestContext requestCxt = null;
+        try {
+          try {
+            requestCxt = futureTask.two.get();
+          } catch (InterruptedException ie) {
+            throw new GadgetException(GadgetException.Code.INTERNAL_SERVER_ERROR, ie);
+          } catch (ExecutionException ee) {
+            throw new GadgetException(GadgetException.Code.INTERNAL_SERVER_ERROR, ee);
+          }
+          if (requestCxt.getGadgetException() != null) {
+            throw requestCxt.getGadgetException();
+          }
+          HttpResponse httpResp = requestCxt.getHttpResp();
+          if (httpResp != null) {
+            if (contentRewriterRegistry != null) {
+              try {
+                httpResp = contentRewriterRegistry.rewriteHttpResponse(requestCxt.getHttpReq(),
+                        httpResp);
+              } catch (RewritingException e) {
+                throw new GadgetException(GadgetException.Code.INTERNAL_SERVER_ERROR, e,
+                        e.getHttpStatusCode());
+              }
+            }
+            cos.output(futureTask.one, httpResp);
+          } else {
+            return false;
+          }
+        } catch (GadgetException ge) {
+          if (cos.outputError(futureTask.one, ge)) {
+            return false;
+          }
+        }
+      }
+    } finally {
+      if (cos != null) {
+        try {
+          cos.close();
+        } catch (IOException ioe) {
+          // Ignore
         }
       }
     }
-    
-    cos.close();
-    response.setStatus(HttpResponse.SC_OK);
+
+    return true;
   }
 
   private static String formatHttpError(int status, String errorMessage, Uri uri) {
@@ -183,7 +271,7 @@ public class ConcatProxyServlet extends InjectedServlet {
 
     // Log the errors here for now. We might want different severity levels
     // for different error codes.
-    logger.log(Level.INFO, "Concat proxy request failed", err);
+    LOG.log(Level.INFO, "Concat proxy request failed", err);
     return err.toString();
   }
   
@@ -277,5 +365,50 @@ public class ConcatProxyServlet extends InjectedServlet {
     }
     
   }
+  
+  // Encapsulates the response context of a single resource fetch.
+  private static class RequestContext {
+    private HttpRequest httpReq;
+    private HttpResponse httpResp;
+    private GadgetException gadgetException;
+
+    public HttpRequest getHttpReq() {
+      return httpReq;
+    }
+
+    public HttpResponse getHttpResp() {
+      return httpResp;
+    }
+
+    public GadgetException getGadgetException() {
+      return gadgetException;
+    }
+
+    public RequestContext(HttpRequest httpReq, HttpResponse httpResp, GadgetException ge) {
+      this.httpReq = httpReq;
+      this.httpResp = httpResp;
+      this.gadgetException = ge;
+    }
+  }
+
+  // Worker class responsible for fetching a single resource.
+  public class HttpFetchCallable implements Callable<RequestContext> {
+    private HttpRequest httpReq;
+
+    public HttpFetchCallable(HttpRequest httpReq) {
+      this.httpReq = httpReq;
+    }
+    
+    public RequestContext call() {
+      HttpResponse httpResp = null;
+      GadgetException gEx = null;
+      try {
+        httpResp = requestPipeline.execute(httpReq);
+      } catch (GadgetException ge){
+        gEx = ge;
+      }
+      return new RequestContext(httpReq, httpResp, gEx);
+    }
+  }  
 }
 

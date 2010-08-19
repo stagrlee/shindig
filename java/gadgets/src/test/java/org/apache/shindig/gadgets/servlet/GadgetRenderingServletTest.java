@@ -24,15 +24,17 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 import org.apache.shindig.common.servlet.HttpServletResponseRecorder;
+import org.apache.shindig.common.uri.Uri;
 import org.apache.shindig.gadgets.GadgetContext;
-import org.apache.shindig.gadgets.UrlGenerator;
-import org.apache.shindig.gadgets.UrlValidationStatus;
 import org.apache.shindig.gadgets.http.HttpRequest;
 import org.apache.shindig.gadgets.render.Renderer;
 import org.apache.shindig.gadgets.render.RenderingResults;
+import org.apache.shindig.gadgets.uri.IframeUriManager;
+import org.apache.shindig.gadgets.uri.UriStatus;
+import org.apache.shindig.gadgets.uri.UriCommon.Param;
 
 import org.easymock.IMocksControl;
-import org.easymock.classextension.EasyMock;
+import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -44,19 +46,19 @@ public class GadgetRenderingServletTest {
       = "Games, HQ, Mang\u00E1, Anime e tudo que um bom nerd ama";
 
   private final IMocksControl control = EasyMock.createNiceControl();
-  private final HttpServletRequest request = control.createMock(HttpServletRequest.class);
+  private final HttpServletRequest request = makeRequestMock(this);
   private final HttpServletResponse response = control.createMock(HttpServletResponse.class);
   private final Renderer renderer = control.createMock(Renderer.class);
   public final HttpServletResponseRecorder recorder = new HttpServletResponseRecorder(response);
   private final GadgetRenderingServlet servlet = new GadgetRenderingServlet();
-  private final UrlGenerator urlGenerator = control.createMock(UrlGenerator.class);
+  private final IframeUriManager iframeUriManager = control.createMock(IframeUriManager.class);
   
   @Before
   public void setUpUrlGenerator() {
-    expect(urlGenerator.validateIframeUrl(isA(String.class))).andReturn(UrlValidationStatus.VALID_UNVERSIONED);
+    expect(iframeUriManager.validateRenderingUri(isA(Uri.class))).andReturn(UriStatus.VALID_UNVERSIONED);
     expect(request.getRequestURL()).andReturn(new StringBuffer("http://foo.com"));
     expect(request.getQueryString()).andReturn("?q=a");
-    servlet.setUrlGenerator(urlGenerator);
+    servlet.setIframeUriManager(iframeUriManager);
   }
 
   @Test
@@ -73,7 +75,7 @@ public class GadgetRenderingServletTest {
     servlet.setRenderer(renderer);
     expect(renderer.render(isA(GadgetContext.class)))
         .andReturn(RenderingResults.ok("working"));
-    expect(request.getParameter(ProxyBase.REFRESH_PARAM)).andReturn("120");
+    expect(request.getParameter(Param.REFRESH.getKey())).andReturn("120");
     control.replay();
     servlet.doGet(request, recorder);
     assertEquals("private,max-age=120", recorder.getHeader("Cache-Control"));
@@ -84,7 +86,7 @@ public class GadgetRenderingServletTest {
     servlet.setRenderer(renderer);
     expect(renderer.render(isA(GadgetContext.class)))
         .andReturn(RenderingResults.ok("working"));
-    expect(request.getParameter(ProxyBase.REFRESH_PARAM)).andReturn("");
+    expect(request.getParameter(Param.REFRESH.getKey())).andReturn("");
     control.replay();
     servlet.doGet(request, recorder);
     assertEquals("private,max-age=300", recorder.getHeader("Cache-Control"));
@@ -171,5 +173,14 @@ public class GadgetRenderingServletTest {
     control.replay();
     servlet.doGet(request, recorder);
     assertEquals("private,max-age=300", recorder.getHeader("Cache-Control"));
+  }
+
+  private static HttpServletRequest makeRequestMock(GadgetRenderingServletTest testcase) {
+    HttpServletRequest req = testcase.control.createMock(HttpServletRequest.class);
+    expect(req.getScheme()).andReturn("http").anyTimes();
+    expect(req.getServerPort()).andReturn(80).anyTimes();
+    expect(req.getServerName()).andReturn("example.com").anyTimes();
+    expect(req.getRequestURI()).andReturn("/path").anyTimes();
+    return req;
   }
 }

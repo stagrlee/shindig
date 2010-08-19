@@ -147,7 +147,9 @@ public class PersonServiceDb implements PersonService {
 
     // all of the above could equally have been placed into a thread to overlay the
     // db wait times.
-    return ImmediateFuture.newInstance(new RestfulCollection<Person>(plist, collectionOptions.getFirst(), totalResults.intValue()));
+    RestfulCollection<Person> restCollection = new RestfulCollection<Person>(
+        plist, collectionOptions.getFirst(), totalResults.intValue(), collectionOptions.getMax());
+    return ImmediateFuture.newInstance(restCollection);
 
   }
 
@@ -163,7 +165,7 @@ public class PersonServiceDb implements PersonService {
     q.setMaxResults(1);
     List<?> plist = q.getResultList();
     Person person = null;
-    if (plist != null && plist.size() > 0) {
+    if (plist != null && !plist.isEmpty()) {
       person = (Person) plist.get(0);
     }
     return ImmediateFuture.newInstance(person);

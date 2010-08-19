@@ -21,15 +21,17 @@ package org.apache.shindig.gadgets.render;
 import org.apache.shindig.common.uri.Uri;
 import org.apache.shindig.gadgets.Gadget;
 import org.apache.shindig.gadgets.GadgetContext;
+import org.apache.shindig.gadgets.parse.GadgetHtmlParser;
 import org.apache.shindig.gadgets.parse.caja.CajaCssParser;
 import org.apache.shindig.gadgets.parse.caja.CajaCssSanitizer;
+import org.apache.shindig.gadgets.parse.caja.CajaHtmlParser;
 import org.apache.shindig.gadgets.rewrite.RewriterTestBase;
 import org.apache.shindig.gadgets.rewrite.ContentRewriterFeature;
 import org.apache.shindig.gadgets.rewrite.GadgetRewriter;
 import org.apache.shindig.gadgets.rewrite.MutableContent;
-import org.apache.shindig.gadgets.servlet.ProxyBase;
 import org.apache.shindig.gadgets.spec.GadgetSpec;
 import org.apache.shindig.gadgets.uri.PassthruManager;
+import org.apache.shindig.gadgets.uri.UriCommon.Param;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
@@ -51,7 +53,7 @@ public class SanitizingGadgetRewriterTest extends RewriterTestBase {
   private final GadgetContext sanitaryGadgetContext = new GadgetContext() {
     @Override
     public String getParameter(String name) {
-      return ProxyBase.SANITIZE_CONTENT_PARAM.equals(name) ? "1" : null;
+      return Param.SANITIZE.getKey().equals(name) ? "1" : null;
     }
     
     @Override
@@ -80,15 +82,20 @@ public class SanitizingGadgetRewriterTest extends RewriterTestBase {
     super.setUp();
     
     gadget = new Gadget().setContext(unsanitaryGadgetContext);
-    gadget.setSpec(new GadgetSpec(Uri.parse("www.example.org/gadget.xml"),
+    gadget.setSpec(new GadgetSpec(Uri.parse("http://www.example.org/gadget.xml"),
         "<Module><ModulePrefs title=''/><Content type='x-html-sanitized'/></Module>"));
     gadget.setCurrentView(gadget.getSpec().getViews().values().iterator().next());
 
     gadgetNoCacheAndDebug = new Gadget().setContext(unsanitaryGadgetContextNoCacheAndDebug);
-    gadgetNoCacheAndDebug.setSpec(new GadgetSpec(Uri.parse("www.example.org/gadget.xml"),
+    gadgetNoCacheAndDebug.setSpec(new GadgetSpec(Uri.parse("http://www.example.org/gadget.xml"),
         "<Module><ModulePrefs title=''/><Content type='x-html-sanitized'/></Module>"));
     gadgetNoCacheAndDebug.setCurrentView(gadgetNoCacheAndDebug.getSpec().getViews().values().iterator().next());
-}
+  }
+  
+  @Override
+  protected Class<? extends GadgetHtmlParser> getParserClass() {
+    return CajaHtmlParser.class;
+  }
 
   private String rewrite(Gadget gadget, String content, Set<String> tags, Set<String> attributes)
       throws Exception {
@@ -114,7 +121,7 @@ public class SanitizingGadgetRewriterTest extends RewriterTestBase {
     ContentRewriterFeature.Factory rewriterFeatureFactory =
         new ContentRewriterFeature.Factory(null,
           new ContentRewriterFeature.DefaultConfig(
-            ".*", "", "HTTP", "embed,img,script,link,style", "false", "false"));
+            ".*", "", "HTTP", "embed,img,script,link,style", false, false));
     return new SanitizingGadgetRewriter(newTags, attributes, rewriterFeatureFactory,
         new CajaCssSanitizer(new CajaCssParser()), new PassthruManager("host.com", "/proxy"));
   }
@@ -151,7 +158,7 @@ public class SanitizingGadgetRewriterTest extends RewriterTestBase {
     String sanitized = 
         "<html><head><link href=\"http://host.com/proxy?url=http%3A%2F%2Fwww.test.com%2Fdir%2F" +
         "proxy%3Furl%3Dhttp%253A%252F%252Fwww.evil.com%252Fx.css%26gadget%3Dwww.example.org%252F" +
-        "gadget.xml%26fp%3D45508%26rewriteMime%3Dtext%2Fcss&sanitize=1&rewriteMime=text%2Fcss\" " +
+        "gadget.xml%26fp%3D45508%26rewriteMime%3Dtext%2Fcss&amp;sanitize=1&amp;rewriteMime=text%2Fcss\" " +
         "rel=\"stylesheet\"></head><body></body></html>";
     String rewritten = rewrite(gadget, markup, set("link"), set("rel", "href"));
     assertEquals(sanitized, rewritten);
@@ -167,8 +174,8 @@ public class SanitizingGadgetRewriterTest extends RewriterTestBase {
     String sanitized = 
         "<html><head><link href=\"http://host.com/proxy?url=http%3A%2F%2Fwww.test.com%2F"
             + "dir%2Fproxy%3Furl%3Dhttp%253A%252F%252Fwww.evil.com%252Fx.css%26gadget%3D"
-            + "www.example.org%252Fgadget.xml%26fp%3D45508%26rewriteMime%3Dtext%2Fcss&"
-            + "sanitize=1&rewriteMime=text%2Fcss\" rel=\"stylesheet\">"
+            + "www.example.org%252Fgadget.xml%26fp%3D45508%26rewriteMime%3Dtext%2Fcss&amp;"
+            + "sanitize=1&amp;rewriteMime=text%2Fcss\" rel=\"stylesheet\">"
             + "</head><body></body></html>";
     String rewritten = rewrite(gadgetNoCacheAndDebug, markup, set("link"), set("rel", "href"));
     assertEquals(sanitized, rewritten);
@@ -200,7 +207,7 @@ public class SanitizingGadgetRewriterTest extends RewriterTestBase {
     // since this does not work in IE
     String sanitized = 
         "<html><head><style>"
-      + "@import url('http://host.com/proxy?url=www.example.org%2Fwww.evil.com%2Fx.js&"
+      + "@import url('http://host.com/proxy?url=http%3A%2F%2Fwww.example.org%2Fwww.evil.com%2Fx.js&"
       + "sanitize=1&rewriteMime=text%2Fcss');"
       + "</style></head><body></body></html>";
     String rewritten = rewrite(gadget, markup, set("style"), set());
@@ -215,7 +222,7 @@ public class SanitizingGadgetRewriterTest extends RewriterTestBase {
     // since this does not work in IE
     String sanitized = 
         "<html><head><style>"
-      + "@import url('http://host.com/proxy?url=www.example.org%2Fwww.evil.com%2Fx.js&sanitize=1"
+      + "@import url('http://host.com/proxy?url=http%3A%2F%2Fwww.example.org%2Fwww.evil.com%2Fx.js&sanitize=1"
       + "&rewriteMime=text%2Fcss');</style></head><body></body></html>";
     String rewritten = rewrite(gadgetNoCacheAndDebug, markup, set("style"), set());
     assertEquals(sanitized, rewritten);
@@ -242,7 +249,7 @@ public class SanitizingGadgetRewriterTest extends RewriterTestBase {
   public void enforceImageSrcProxied() throws Exception {
     String markup = "<img src='http://www.evil.com/x.js'>Evil happens</img>";
     String sanitized = "<img src=\"http://host.com/proxy?url=http%3A%2F%2F" +
-        "www.evil.com%2Fx.js&sanitize=1&rewriteMime=image%2F*\">Evil happens";
+        "www.evil.com%2Fx.js&amp;sanitize=1&amp;rewriteMime=image%2F*\">Evil happens";
     assertEquals(sanitized, rewrite(gadget, markup, set("img"), set("src")));
   }
 
@@ -250,7 +257,7 @@ public class SanitizingGadgetRewriterTest extends RewriterTestBase {
   public void enforceImageSrcProxiedNoCacheAndDebug() throws Exception {
     String markup = "<img src='http://www.evil.com/x.js'>Evil happens</img>";
     String sanitized = "<img src=\"http://host.com/proxy?url=http%3A%2F%2Fwww.evil.com" +
-        "%2Fx.js&sanitize=1&rewriteMime=image%2F*\">Evil happens";
+        "%2Fx.js&amp;sanitize=1&amp;rewriteMime=image%2F*\">Evil happens";
     assertEquals(sanitized, rewrite(gadgetNoCacheAndDebug, markup, set("img"), set("src")));
   }
 
@@ -347,44 +354,6 @@ public class SanitizingGadgetRewriterTest extends RewriterTestBase {
     matcher.matches();
     assertEquals("<p foo=\"bar\"></p>", matcher.group(1));
   }
-     
- @Test
-  public void restrictHrefAndSrcAttributes() throws Exception {
-    String markup =
-        "<element " +
-        "href=\"http://example.org/valid-href\" " +
-        "src=\"http://example.org/valid-src\"/> " +
-        "<element " +
-        "href=\"https://example.org/valid-href\" " +
-        "src=\"https://example.org/valid-src\"/> " +
-        "<element " +
-        "href=\"http-evil://example.org/valid-href\" " +
-        "src=\"http-evil://example.org/valid-src\"/> " +
-        "<element " +
-        "href=\"javascript:evil()\" " +
-        "src=\"javascript:evil()\" /> " +
-        "<element " +
-        "href=\"//example.org/valid-href\" " +
-        "src=\"//example.org/valid-src\"/>";
-
-    // TODO: This test is only valid when using a parser that converts empty tags to
-    // balanced tags. The default (Neko) parser does this, with special case logic for handling
-    // empty tags like br or link.
-    String sanitized =
-      "<element " +
-      "href=\"http://example.org/valid-href\" " +
-      "src=\"http://example.org/valid-src\"></element> " +
-      "<element " +
-      "href=\"https://example.org/valid-href\" " +
-      "src=\"https://example.org/valid-src\"></element> " +
-      "<element></element> " +
-      "<element></element> " +
-      "<element " +
-      "href=\"//example.org/valid-href\" " +
-      "src=\"//example.org/valid-src\"></element>";
-
-    assertEquals(sanitized, rewrite(gadget, markup, set("element"), set("href", "src")));
-  }
 
   @Test
   public void allCommentsStripped() throws Exception {
@@ -412,7 +381,7 @@ public class SanitizingGadgetRewriterTest extends RewriterTestBase {
         "<b>bold text</b></p><b>Bold text</b></body></html>";
 
     Gadget gadget = new Gadget().setContext(sanitaryGadgetContext);
-    gadget.setSpec(new GadgetSpec(Uri.parse("www.example.org/gadget.xml"),
+    gadget.setSpec(new GadgetSpec(Uri.parse("http://www.example.org/gadget.xml"),
         "<Module><ModulePrefs title=''/><Content type='html'/></Module>"));
     gadget.setCurrentView(gadget.getSpec().getViews().values().iterator().next());
     assertEquals(sanitized, rewrite(gadget, markup, set("p", "b", "style"), set()));

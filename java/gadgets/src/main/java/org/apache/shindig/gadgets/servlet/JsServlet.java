@@ -19,23 +19,34 @@ package org.apache.shindig.gadgets.servlet;
 
 import com.google.common.collect.ImmutableSet;
 
+import com.google.common.collect.Maps;
+
+import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.commons.lang.StringUtils;
+import org.apache.shindig.common.JsonSerializer;
 import org.apache.shindig.common.servlet.HttpUtil;
 import org.apache.shindig.common.servlet.InjectedServlet;
+import org.apache.shindig.common.uri.UriBuilder;
 import org.apache.shindig.config.ContainerConfig;
 import org.apache.shindig.gadgets.GadgetContext;
+import org.apache.shindig.gadgets.GadgetException;
 import org.apache.shindig.gadgets.RenderingContext;
-import org.apache.shindig.gadgets.UrlGenerator;
-import org.apache.shindig.gadgets.UrlValidationStatus;
+import org.apache.shindig.gadgets.config.ConfigContributor;
 import org.apache.shindig.gadgets.features.FeatureRegistry;
 import org.apache.shindig.gadgets.features.FeatureResource;
+import org.apache.shindig.gadgets.uri.JsUriManager;
+import org.apache.shindig.gadgets.uri.UriStatus;
 
 import com.google.inject.Inject;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
@@ -44,17 +55,49 @@ import javax.servlet.http.HttpServletResponse;
  * Used by type=URL gadgets in loading JavaScript resources.
  */
 public class JsServlet extends InjectedServlet {
+  
+  private static final long serialVersionUID = 6255917470412008175L;
 
-  private FeatureRegistry registry;
+  static final String ONLOAD_JS_TPL = "(function() {" +
+      "var nm='%s';" +
+      "if (typeof window[nm]==='function') {" +
+      "window[nm]();" +
+      '}' +
+      "})();";
+  private static final Pattern ONLOAD_FN_PATTERN = Pattern.compile("[a-zA-Z0-9_]+");
+
+  private transient FeatureRegistry registry;
+  private transient JsUriManager jsUriManager;
+  private transient ContainerConfig containerConfig;
+  private transient Map<String, ConfigContributor> configContributors;
+
   @Inject
   public void setRegistry(FeatureRegistry registry) {
+    checkInitialized();
     this.registry = registry;
   }
-  
-  private UrlGenerator urlGenerator;
+
   @Inject
-  public void setUrlGenerator(UrlGenerator urlGenerator) {
-    this.urlGenerator = urlGenerator;
+  public void setUrlGenerator(JsUriManager jsUriManager) {
+    checkInitialized();
+    this.jsUriManager = jsUriManager;
+  }
+
+  @Inject
+  public void setContainerConfig(ContainerConfig containerConfig) {
+    checkInitialized();
+    this.containerConfig = containerConfig;
+  }
+
+  @Inject
+  public void setConfigContributors(Map<String, ConfigContributor> configContributors) {
+    checkInitialized();
+    this.configContributors = configContributors;
+  }
+
+  @Override
+  public void init(ServletConfig config) throws ServletException {
+    super.init(config);
   }
 
   @Override
@@ -63,10 +106,15 @@ public class JsServlet extends InjectedServlet {
     // If an If-Modified-Since header is ever provided, we always say
     // not modified. This is because when there actually is a change,
     // cache busting should occur.
-    UrlValidationStatus vstatus = urlGenerator.validateJsUrl(
-        req.getRequestURL().append('?').append(req.getQueryString()).toString());
+    UriStatus vstatus;
+    try {
+      vstatus = jsUriManager.processExternJsUri(new UriBuilder(req).toUri()).getStatus();
+    } catch (GadgetException e) {
+      resp.sendError(e.getHttpStatusCode(), e.getMessage());
+      return;
+    }
     if (req.getHeader("If-Modified-Since") != null &&
-        vstatus == UrlValidationStatus.VALID_VERSIONED) {
+        vstatus == UriStatus.VALID_VERSIONED) {
       resp.setStatus(HttpServletResponse.SC_NOT_MODIFIED);
       return;
     }
@@ -82,7 +130,7 @@ public class JsServlet extends InjectedServlet {
           0, resourceName.length() - ".js".length());
     }
 
-    Set<String> needed = ImmutableSet.of(StringUtils.split(resourceName, ':'));
+    Set<String> needed = ImmutableSet.copyOf(StringUtils.split(resourceName, ':'));
 
     String debugStr = req.getParameter("debug");
     String containerParam = req.getParameter("container");
@@ -91,7 +139,7 @@ public class JsServlet extends InjectedServlet {
     boolean debug = "1".equals(debugStr);
     final RenderingContext context = "1".equals(containerStr) ?
         RenderingContext.CONTAINER : RenderingContext.GADGET;
-    final String container = 
+    final String container =
         containerParam != null ? containerParam : ContainerConfig.DEFAULT_CONTAINER;
 
     GadgetContext ctx = new GadgetContext() {
@@ -99,14 +147,14 @@ public class JsServlet extends InjectedServlet {
       public RenderingContext getRenderingContext() {
         return context;
       }
-      
+
       @Override
       public String getContainer() {
         return container;
       }
     };
-    Collection<? extends FeatureResource> resources =
-        registry.getFeatureResources(ctx, needed, null);
+
+    Collection<? extends FeatureResource> resources = registry.getFeatureResources(ctx, needed, null);
     StringBuilder jsData = new StringBuilder();
     boolean isProxyCacheable = true;
     for (FeatureResource featureResource : resources) {
@@ -121,6 +169,37 @@ public class JsServlet extends InjectedServlet {
       jsData.append(";\n");
     }
 
+    if (context == RenderingContext.CONTAINER) {
+      // Append some container specific things
+
+      Map<String, Object> features = containerConfig.getMap(container, "gadgets.features");
+      Map<String, Object> config = Maps.newHashMapWithExpectedSize(features == null ? 2 : features.size() + 2);
+
+      if (features != null) {
+        // Discard what we don't care about.
+        for (String name : registry.getFeatures(needed)) {
+          Object conf = features.get(name);
+          // Add from containerConfig
+          if (conf != null) {
+            config.put(name, conf);
+          }
+          ConfigContributor contributor = configContributors.get(name);
+          if (contributor != null) {
+            contributor.contribute(config, container, req.getHeader("Host"));
+          }
+        }
+        jsData.append("gadgets.config.init(").append(JsonSerializer.serialize(config)).append(");\n");
+      }
+    }
+
+    String onloadStr = req.getParameter("onload");
+    if (onloadStr != null) {
+      if (!ONLOAD_FN_PATTERN.matcher(onloadStr).matches()) {
+        resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid onload callback specified");
+        return;
+      }
+      jsData.append(String.format(ONLOAD_JS_TPL, StringEscapeUtils.escapeJavaScript(onloadStr)));
+    }
 
     if (jsData.length() == 0) {
       resp.setStatus(HttpServletResponse.SC_NOT_FOUND);
@@ -136,7 +215,7 @@ public class JsServlet extends InjectedServlet {
         // Unversioned files get cached for 1 hour.
         HttpUtil.setCachingHeaders(resp, 60 * 60, !isProxyCacheable);
         break;
-      case INVALID:
+      case INVALID_VERSION:
         // URL is invalid in some way, likely version mismatch.
         // Indicate no-cache forcing subsequent requests to regenerate URLs.
         HttpUtil.setNoCache(resp);

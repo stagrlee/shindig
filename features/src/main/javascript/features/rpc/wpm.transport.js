@@ -63,11 +63,8 @@ gadgets.rpctx.wpm = function() {
       };
  
       // Set up native postMessage handler.
-      if (typeof window.addEventListener != 'undefined') { 
-          window.addEventListener('message', onmessage, false); 
-      } else if (typeof window.attachEvent != 'undefined') { 
-          window.attachEvent('onmessage', onmessage); 
-      }
+      gadgets.util.attachBrowserEvent(window, 'message', onmessage, false);
+
       ready('..', true);  // Immediately ready to send to parent.
       return true;
     },

@@ -20,67 +20,77 @@ package org.apache.shindig.auth;
 
 /**
  * An abstract representation of a signing token.
- * Use in conjunction with @code SecurityTokenDecoder.
+ * Use in conjunction with @code SecurityTokenCodec.
  */
 public interface SecurityToken {
 
   /**
    * @return the owner from the token, or null if there is none.
    */
-  public String getOwnerId();
+  String getOwnerId();
 
   /**
    * @return the viewer from the token, or null if there is none.
    */
-  public String getViewerId();
+  String getViewerId();
 
   /**
    * @return the application id from the token, or null if there is none.
    */
-  public String getAppId();
+  String getAppId();
 
   /**
    * @return the domain from the token, or null if there is none.
    */
-  public String getDomain();
+  String getDomain();
 
   /**
    * @return The container.
    */
-  public String getContainer();
+  String getContainer();
 
   /**
    * @return the URL of the application
    */
-  public String getAppUrl();
+  String getAppUrl();
 
   /**
    * @return the module ID of the application
    */
-  public long getModuleId();
+  long getModuleId();
+
+  /**
+   * @return the timestamp that this token expires or null if unknown or indeterminate
+   */
+  Long getExpiresAt();
+
+  /**
+   * @return true if the token is no longer valid
+   */
+  boolean isExpired();
 
   /**
    * @return an updated version of the token to return to the gadget, or null
    * if there is no need to update the token.
    */
-  public String getUpdatedToken();
+  String getUpdatedToken();
 
   /**
    * @return the authentication mechanism used to generate this security token
    * @see AuthenticationMode
    */
-  public String getAuthenticationMode();
+  String getAuthenticationMode();
 
   /**
    * @return a string formatted JSON object from the container, or null if there
    * is no JSON from the container.
    */
-  public String getTrustedJson();
+  String getTrustedJson();
 
   /**
    * @return true if the token is for an anonymous viewer/owner
    */
-  public boolean isAnonymous();
+  boolean isAnonymous();
   
   /**
    * @return the URL being used by the current request
@@ -91,5 +101,5 @@ public interface SecurityToken {
    * 
    * @throws UnsupportedOperationException if the URL is not available.
    */
-  public String getActiveUrl();
+  String getActiveUrl();
 }

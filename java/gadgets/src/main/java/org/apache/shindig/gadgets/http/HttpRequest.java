@@ -51,6 +51,10 @@ public class HttpRequest {
   private String method = "GET";
   private Uri uri;
   private final Map<String, List<String>> headers = Maps.newTreeMap(String.CASE_INSENSITIVE_ORDER);
+
+  // Internal parameters which serve as extra information to pass along the
+  // chain of HttpRequest processing.
+  // NOTE: These are not get/post parameter equivalent of HttpServletRequest.
   private final Map<String, String> params = Maps.newHashMap();
 
   private byte[] postBody = ArrayUtils.EMPTY_BYTE_ARRAY;
@@ -64,6 +68,9 @@ public class HttpRequest {
 
   // Sanitization
   private boolean sanitizationRequested;
+
+  // Caja
+  private boolean cajaRequested;
 
   // Whether to follow redirects
   private boolean followRedirects = true;
@@ -214,6 +221,18 @@ public class HttpRequest {
 
   public void setSanitizationRequested(boolean sanitizationRequested) {
     this.sanitizationRequested = sanitizationRequested;
+  }
+
+    /**
+   * Should content fetched in response to this request
+   * be sanitized based on the specified mime-type
+   */
+  public boolean isCajaRequested() {
+    return cajaRequested;
+  }
+
+  public void setCajaRequested(boolean cajaRequested) {
+    this.cajaRequested = cajaRequested;
   }
 
   /**
@@ -476,27 +495,25 @@ public class HttpRequest {
     return method.hashCode()
       ^ uri.hashCode()
       ^ authType.hashCode()
-      ^ postBody.hashCode()
+      ^ Arrays.hashCode(postBody)
       ^ headers.hashCode();
   }
   
   @Override
   public boolean equals(Object obj) {
-    if (obj == this) {return true;}
-    if (obj instanceof HttpRequest) {
-      HttpRequest req = (HttpRequest)obj;
-      return method.equals(req.method) &&
-             uri.equals(req.uri) &&
-             authType == req.authType &&
-             Arrays.equals(postBody, req.postBody) &&
-             headers.equals(req.headers);
-             // TODO: Verify that other fields aren't meaningful. Especially important to check for
-             // oauth args.
+    if (obj == this) {
+      return true;
     }
-    return false;
+    if (!(obj instanceof HttpRequest)) {
+      return false;
+    }
+    HttpRequest req = (HttpRequest)obj;
+    return method.equals(req.method) &&
+            uri.equals(req.uri) &&
+            authType == req.authType &&
+            Arrays.equals(postBody, req.postBody) &&
+            headers.equals(req.headers);
+    // TODO: Verify that other fields aren't meaningful. Especially important to check for oauth args.
   }
-
-
-
 }
 

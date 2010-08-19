@@ -28,19 +28,18 @@ import java.util.StringTokenizer;
 import javax.el.ELException;
 
 import com.google.common.collect.ImmutableList;
-import com.google.inject.Inject;
 
-import de.odysseus.el.misc.TypeConverter;
 
 /**
  * Custom type converter class that overrides the default EL coercion rules
  * where necessary.  Specifically, Booleans are handled differently,
  * and JSONArray is supported.
  */
-public class ShindigTypeConverter implements TypeConverter {
-
-  @Inject
-  public ShindigTypeConverter() {  
+public class ShindigTypeConverter implements ELTypeConverter {
+ 
+  
+  public  boolean isPostConvertible(Class<?> type) {
+    return false;
   }
   
   @SuppressWarnings("unchecked")
@@ -58,8 +57,8 @@ public class ShindigTypeConverter implements TypeConverter {
       return (T) coerceToIterable(obj);
     }
     
-    // Otherwise, use the default
-    return TypeConverter.DEFAULT.convert(obj, type);
+    //  Nothing more we can do.
+    return null;
   }
 
   /**
@@ -114,7 +113,7 @@ public class ShindigTypeConverter implements TypeConverter {
       // Does this object have a "list" property that is an array?
       // TODO: add to specification
       Object childList = json.opt("list");
-      if (childList != null && childList instanceof JSONArray) {
+      if (childList instanceof JSONArray) {
         return coerceToIterable(childList);
       }
       

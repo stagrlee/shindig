@@ -18,6 +18,11 @@
  */
 package org.apache.shindig.gadgets.render;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.LinkedHashMultimap;
+import com.google.common.collect.Multimap;
+
 import org.apache.shindig.common.EasyMockTestCase;
 import org.apache.shindig.config.JsonContainerConfig;
 import org.apache.shindig.expressions.Expressions;
@@ -27,8 +32,7 @@ import org.apache.shindig.gadgets.http.HttpFetcher;
 import org.apache.shindig.gadgets.http.HttpRequest;
 import org.apache.shindig.gadgets.http.HttpResponse;
 
-import com.google.common.collect.*;
-import org.easymock.classextension.EasyMock;
+import org.easymock.EasyMock;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONException;
@@ -53,7 +57,7 @@ public class DefaultServiceFetcherTest extends EasyMockTestCase {
     JSONObject config = createConfig();
 
     JsonContainerConfig containerConfig =
-        new JsonContainerConfig(config, new Expressions(new Functions(), null, new ShindigTypeConverter()));
+        new JsonContainerConfig(config, Expressions.forTesting(new Functions()));
     mockFetcher = mock(HttpFetcher.class);
     fetcher = new DefaultServiceFetcher(containerConfig, mockFetcher);
   }
@@ -92,7 +96,7 @@ public class DefaultServiceFetcherTest extends EasyMockTestCase {
         .remove(DefaultServiceFetcher.OSAPI_FEATURE_CONFIG);
     JsonContainerConfig containerConfig =
         new JsonContainerConfig(config,
-            new Expressions(new Functions(), null, new ShindigTypeConverter()));
+            Expressions.forTesting(new Functions()));
     fetcher = new DefaultServiceFetcher(containerConfig, mockFetcher);
 
     EasyMock.expect(mockFetcher.fetch(EasyMock.isA(HttpRequest.class))).andReturn(
@@ -117,11 +121,11 @@ public class DefaultServiceFetcherTest extends EasyMockTestCase {
   public void testReadConfigWithValidEndpoints() throws Exception {
     List<String> endPoint1Services = ImmutableList.of("do.something", "delete.someting");
     JSONObject service1 = new JSONObject();
-    service1.put("data", endPoint1Services);
+    service1.put("result", endPoint1Services);
 
     List<String> endPoint2Services = ImmutableList.of("weather.get");
     JSONObject service2 = new JSONObject();
-    service2.put("data", endPoint2Services);
+    service2.put("result", endPoint2Services);
 
     EasyMock.expect(mockFetcher.fetch(EasyMock.isA(HttpRequest.class))).andReturn(
         new HttpResponse(service1.toString()));

@@ -39,7 +39,7 @@
           }
         });
       } else {
-        var jsonResponse = response.data;
+        var jsonResponse = response.result || response.data;
         if (jsonResponse.error) {
           callback(jsonResponse);
         } else {
@@ -88,7 +88,7 @@
     }
   }
 
-  // Do not run this in container mode.
+  // We do run this in the container mode in the new common container
   if (gadgets.config) {
     gadgets.config.register("osapi.services", null, init);
   }

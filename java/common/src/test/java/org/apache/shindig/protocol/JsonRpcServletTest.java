@@ -20,15 +20,16 @@ package org.apache.shindig.protocol;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.isA;
-import static org.easymock.classextension.EasyMock.reset;
+import static org.easymock.EasyMock.reset;
 
 import org.apache.shindig.common.JsonAssert;
 import org.apache.shindig.common.testing.FakeGadgetToken;
+import org.apache.shindig.config.ContainerConfig;
 import org.apache.shindig.protocol.conversion.BeanJsonConverter;
 import org.apache.shindig.protocol.multipart.FormDataItem;
 import org.apache.shindig.protocol.multipart.MultipartFormParser;
 import org.easymock.IMocksControl;
-import org.easymock.classextension.EasyMock;
+import org.easymock.EasyMock;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -66,6 +67,7 @@ public class JsonRpcServletTest extends Assert {
   private HttpServletResponse res;
   private JsonRpcServlet servlet;
   private MultipartFormParser multipartFormParser;
+  private ContainerConfig containerConfig;
 
   private final IMocksControl mockControl = EasyMock.createNiceControl();
 
@@ -78,6 +80,7 @@ public class JsonRpcServletTest extends Assert {
     servlet = new JsonRpcServlet();
     req = mockControl.createMock(HttpServletRequest.class);
     res = mockControl.createMock(HttpServletResponse.class);
+    containerConfig = mockControl.createMock(ContainerConfig.class);
 
     multipartFormParser = mockControl.createMock(MultipartFormParser.class);
     EasyMock.expect(multipartFormParser.isMultipartContent(req)).andStubReturn(false);
@@ -91,6 +94,8 @@ public class JsonRpcServletTest extends Assert {
 
     servlet.setHandlerRegistry(registry);
     servlet.setBeanConverters(converter, null, null);
+    servlet.setContainerConfig(containerConfig);
+
     handler.setMock(new TestHandler() {
       @Override
       public Object get(RequestItem req) {
@@ -115,7 +120,7 @@ public class JsonRpcServletTest extends Assert {
     servlet.service(req, res);
     mockControl.verify();
 
-    JsonAssert.assertJsonEquals("{id: 'id', data: {foo:'bar'}}", getOutput());
+    JsonAssert.assertJsonEquals("{id: 'id', result: {foo:'bar'}}", getOutput());
   }
 
   @Test
@@ -153,7 +158,7 @@ public class JsonRpcServletTest extends Assert {
     servlet.service(req, res);
     mockControl.verify();
 
-    JsonAssert.assertJsonEquals("{id: 'id', data: {image-data:'" + IMAGE_DATA +
+    JsonAssert.assertJsonEquals("{id: 'id', result: {image-data:'" + IMAGE_DATA +
         "', image-type:'" + IMAGE_TYPE + "', image-ref:'@" + IMAGE_FIELDNAME + "'}}", getOutput());
   }
 
@@ -195,7 +200,7 @@ public class JsonRpcServletTest extends Assert {
     servlet.service(req, res);
     mockControl.verify();
 
-    JsonAssert.assertJsonEquals("{id: 'id', data: {image-data:'" + IMAGE_DATA +
+    JsonAssert.assertJsonEquals("{id: 'id', result: {image-data:'" + IMAGE_DATA +
         "', image-type:'" + IMAGE_TYPE + "', image-ref:'@" + IMAGE_FIELDNAME + "'}}", getOutput());
   }
 
@@ -242,7 +247,7 @@ public class JsonRpcServletTest extends Assert {
     servlet.service(req, res);
     mockControl.verify();
 
-    JsonAssert.assertJsonEquals("{id: 'id', data: {image-data:'" + IMAGE_DATA +
+    JsonAssert.assertJsonEquals("{id: 'id', result: {image-data:'" + IMAGE_DATA +
         "', image-type:'" + IMAGE_TYPE + "', image-ref:'@" + IMAGE_FIELDNAME + "'}}", getOutput());
   }
 
@@ -287,7 +292,7 @@ public class JsonRpcServletTest extends Assert {
     mockControl.verify();
 
     String output = getOutput();
-    assertTrue(-1 != output.indexOf("Unsupported Content-Type application/octet-stream"));
+    assertTrue(output.contains("Unsupported Content-Type application/octet-stream"));
   }
 
   @Test
@@ -337,7 +342,7 @@ public class JsonRpcServletTest extends Assert {
     servlet.service(req, res);
     mockControl.verify();
 
-    JsonAssert.assertJsonEquals("[{id:'1',data:{foo:'bar'}},{id:'2',data:{foo:'bar'}}]",
+    JsonAssert.assertJsonEquals("[{id:'1',result:{foo:'bar'}},{id:'2',result:{foo:'bar'}}]",
         getOutput());
   }
 
@@ -357,21 +362,21 @@ public class JsonRpcServletTest extends Assert {
     servlet.service(req, res);
     mockControl.verify();
 
-    JsonAssert.assertJsonEquals("{id:'1',data:{foo:'bar'}}", getOutput());
+    JsonAssert.assertJsonEquals("{id:'1',result:{foo:'bar'}}", getOutput());
   }
 
   @Test
   public void testGetJsonResponseWithKey() throws Exception {
     ResponseItem responseItem = new ResponseItem("Name");
     Object result = servlet.getJSONResponse("my-key", responseItem);
-    JsonAssert.assertObjectEquals("{id: 'my-key', data: 'Name'}", result);
+    JsonAssert.assertObjectEquals("{id: 'my-key', result: 'Name'}", result);
   }
 
   @Test
   public void testGetJsonResponseWithoutKey() throws Exception {
     ResponseItem responseItem = new ResponseItem("Name");
     Object result = servlet.getJSONResponse(null, responseItem);
-    JsonAssert.assertObjectEquals("{data: 'Name'}", result);
+    JsonAssert.assertObjectEquals("{result: 'Name'}", result);
   }
 
   @Test

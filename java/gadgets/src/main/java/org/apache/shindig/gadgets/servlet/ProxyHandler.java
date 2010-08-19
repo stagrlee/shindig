@@ -20,158 +20,145 @@ package org.apache.shindig.gadgets.servlet;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-
-import org.apache.commons.io.IOUtils;
+import com.google.inject.name.Named;
 import org.apache.commons.lang.StringUtils;
-import org.apache.shindig.common.servlet.HttpUtil;
+import org.apache.commons.io.IOUtils;
 import org.apache.shindig.common.uri.Uri;
-import org.apache.shindig.common.uri.UriBuilder;
 import org.apache.shindig.gadgets.GadgetException;
-import org.apache.shindig.gadgets.LockedDomainService;
 import org.apache.shindig.gadgets.http.HttpRequest;
 import org.apache.shindig.gadgets.http.HttpResponse;
+import org.apache.shindig.gadgets.http.HttpResponseBuilder;
 import org.apache.shindig.gadgets.http.RequestPipeline;
-import org.apache.shindig.gadgets.rewrite.RequestRewriterRegistry;
+import org.apache.shindig.gadgets.rewrite.ResponseRewriterRegistry;
 import org.apache.shindig.gadgets.rewrite.RewritingException;
 import org.apache.shindig.gadgets.uri.ProxyUriManager;
+import org.apache.shindig.gadgets.uri.UriCommon;
+import org.apache.shindig.gadgets.uri.UriUtils;
+import org.apache.shindig.gadgets.uri.UriUtils.DisallowedHeaders;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Map;
-import java.util.logging.Logger;
-
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 
 /**
  * Handles open proxy requests.
  */
 @Singleton
-public class ProxyHandler extends ProxyBase {
-  private static final Logger logger = Logger.getLogger(ProxyHandler.class.getName());
-
+public class ProxyHandler {
   // TODO: parameterize these.
   static final Integer LONG_LIVED_REFRESH = (365 * 24 * 60 * 60);  // 1 year
   static final Integer DEFAULT_REFRESH = (60 * 60);                // 1 hour
-  
+
   private final RequestPipeline requestPipeline;
-  private final LockedDomainService lockedDomainService;
-  private final RequestRewriterRegistry contentRewriterRegistry;
-  private final ProxyUriManager proxyUriManager;
+  private final ResponseRewriterRegistry contentRewriterRegistry;
+  protected final boolean remapInternalServerError;
 
   @Inject
   public ProxyHandler(RequestPipeline requestPipeline,
-                      LockedDomainService lockedDomainService,
-                      RequestRewriterRegistry contentRewriterRegistry,
-                      ProxyUriManager proxyUriManager) {
+                      ResponseRewriterRegistry contentRewriterRegistry,
+                      @Named("shindig.proxy.remapInternalServerError")
+                      Boolean remapInternalServerError) {
     this.requestPipeline = requestPipeline;
-    this.lockedDomainService = lockedDomainService;
     this.contentRewriterRegistry = contentRewriterRegistry;
-    this.proxyUriManager = proxyUriManager;
+    this.remapInternalServerError = remapInternalServerError;
   }
 
   /**
    * Generate a remote content request based on the parameters sent from the client.
    */
-  private HttpRequest buildHttpRequest(HttpServletRequest request,
+  private HttpRequest buildHttpRequest(
       ProxyUriManager.ProxyUri uriCtx, Uri tgt) throws GadgetException {
-    validateUrl(tgt);
+    ServletUtil.validateUrl(tgt);
     HttpRequest req = uriCtx.makeHttpRequest(tgt);
-    this.setRequestHeaders(request, req);
+    req.setRewriteMimeType(uriCtx.getRewriteMimeType());
     return req;
   }
 
-  @Override
-  protected void doFetch(HttpServletRequest request, HttpServletResponse response)
+  public HttpResponse fetch(ProxyUriManager.ProxyUri proxyUri)
       throws IOException, GadgetException {
-    if (request.getHeader("If-Modified-Since") != null) {
-      response.setStatus(HttpServletResponse.SC_NOT_MODIFIED);
-      return;
-    }
-
-    // TODO: Consider removing due to redundant logic.
-    String host = request.getHeader("Host");
-    if (!lockedDomainService.isSafeForOpenProxy(host)) {
-      // Force embedded images and the like to their own domain to avoid XSS
-      // in gadget domains.
-      String msg = "Embed request for url " + getParameter(request, URL_PARAM, "") +
-          " made to wrong domain " + host;
-      logger.info(msg);
-      throw new GadgetException(GadgetException.Code.INVALID_PARAMETER, msg,
-          HttpResponse.SC_BAD_REQUEST);
-    }
-    
-    // Parse request uri:
-    ProxyUriManager.ProxyUri proxyUri = proxyUriManager.process(
-        new UriBuilder(request).toUri());
-    
-    try {
-      HttpUtil.setCachingHeaders(response,
-          proxyUri.translateStatusRefresh(LONG_LIVED_REFRESH, DEFAULT_REFRESH), false);
-    } catch (GadgetException gex) {
-      response.sendError(HttpServletResponse.SC_BAD_REQUEST, gex.getMessage());
-      return;
-    }
-
-    HttpRequest rcr = buildHttpRequest(request, proxyUri, proxyUri.getResource());
+    HttpRequest rcr = buildHttpRequest(proxyUri, proxyUri.getResource());
     if (rcr == null) {
       throw new GadgetException(GadgetException.Code.INVALID_PARAMETER,
-          "No url paramater in request", HttpResponse.SC_BAD_REQUEST);      
+          "No url parameter in request", HttpResponse.SC_BAD_REQUEST);
     }
+
     HttpResponse results = requestPipeline.execute(rcr);
-    
+
     if (results.isError()) {
       // Error: try the fallback. Particularly useful for proxied images.
       Uri fallbackUri = proxyUri.getFallbackUri();
       if (fallbackUri != null) {
-        HttpRequest fallbackRcr = buildHttpRequest(request, proxyUri, fallbackUri);
+        HttpRequest fallbackRcr = buildHttpRequest(proxyUri, fallbackUri);
         results = requestPipeline.execute(fallbackRcr);
       }
     }
-    
+
     if (contentRewriterRegistry != null) {
       try {
         results = contentRewriterRegistry.rewriteHttpResponse(rcr, results);
       } catch (RewritingException e) {
-        throw new GadgetException(GadgetException.Code.INTERNAL_SERVER_ERROR, e,
-            e.getHttpStatusCode());
-      }
-    }
-
-    for (Map.Entry<String, String> entry : results.getHeaders().entries()) {
-      String name = entry.getKey();
-      if (!DISALLOWED_RESPONSE_HEADERS.contains(name.toLowerCase())) {
-          response.addHeader(name, entry.getValue());
-      }
-    }
-
-    String responseType = results.getHeader("Content-Type");
-    if (!StringUtils.isEmpty(rcr.getRewriteMimeType())) {
-      String requiredType = rcr.getRewriteMimeType();
-      // Use a 'Vary' style check on the response
-      if (requiredType.endsWith("/*") &&
-          !StringUtils.isEmpty(responseType)) {
-        requiredType = requiredType.substring(0, requiredType.length() - 2);
-        if (!responseType.toLowerCase().startsWith(requiredType.toLowerCase())) {
-          response.setContentType(requiredType);
-          responseType = requiredType;
+        // Throw exception if the RETURN_ORIGINAL_CONTENT_ON_ERROR param is not
+        // set to "true" or the error is irrecoverable from.
+        if (!proxyUri.shouldReturnOrigOnErr() || !isRecoverable(results)) {
+          throw new GadgetException(GadgetException.Code.INTERNAL_SERVER_ERROR, e,
+              e.getHttpStatusCode());
         }
-      } else {
-        response.setContentType(requiredType);
-        responseType = requiredType;
       }
     }
 
-    setResponseHeaders(request, response, results);
+    HttpResponseBuilder response = new HttpResponseBuilder(results);
+    response.clearAllHeaders();
 
-    if (results.getHttpStatusCode() != HttpResponse.SC_OK) {
-      if (results.getHttpStatusCode() == HttpResponse.SC_INTERNAL_SERVER_ERROR) {
-        // External "internal error" should be mapped to gateway error
-        response.sendError(HttpResponse.SC_BAD_GATEWAY);
-      } else {
-        response.sendError(results.getHttpStatusCode());
-      }
+    try {
+      ServletUtil.setCachingHeaders(response,
+          proxyUri.translateStatusRefresh(LONG_LIVED_REFRESH, DEFAULT_REFRESH), false);
+    } catch (GadgetException gex) {
+      return ServletUtil.errorResponse(gex);
     }
 
-    IOUtils.copy(results.getResponse(), response.getOutputStream());
+    UriUtils.copyResponseHeadersAndStatusCode(results, response, remapInternalServerError, true,
+        DisallowedHeaders.CACHING_DIRECTIVES,  // Proxy sets its own caching headers.
+        DisallowedHeaders.CLIENT_STATE_DIRECTIVES,  // Overridden or irrelevant to proxy.
+        DisallowedHeaders.OUTPUT_TRANSFER_DIRECTIVES
+        );
+
+    // Set Content-Type and Content-Disposition. Do this after copy results headers,
+    // in order to prevent those from overwriting the correct values.
+    setResponseContentHeaders(response, results);
+
+    UriUtils.maybeRewriteContentType(rcr, response);
+
+    // TODO: replace this with streaming APIs when ready
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    IOUtils.copy(results.getResponse(), baos);
+    response.setResponse(baos.toByteArray());
+    return response.create();
+  }
+
+  private void setResponseContentHeaders(HttpResponseBuilder response, HttpResponse results) {
+    // We're skipping the content disposition header for flash due to an issue with Flash player 10
+    // This does make some sites a higher value phishing target, but this can be mitigated by
+    // additional referer checks.
+    if (!"application/x-shockwave-flash".equalsIgnoreCase(results.getHeader("Content-Type")) &&
+        !"application/x-shockwave-flash".equalsIgnoreCase(response.getHeader("Content-Type"))) {
+      response.setHeader("Content-Disposition", "attachment;filename=p.txt");
+    }
+    if (results.getHeader("Content-Type") == null) {
+      response.setHeader("Content-Type", "application/octet-stream");
+    }
+  }
+
+  /**
+   * Returns true in case the error encountered while rewriting the content
+   * is recoverable. The rationale behind it is that errors should be thrown
+   * only in case of serious grave errors (defined to be un recoverable).
+   * It should always be preferred to handle errors and return the original
+   * content at least.
+   *
+   * @param results The result of rewriting.
+   * @return True if the error is recoverable, false otherwise.
+   */
+  public boolean isRecoverable(HttpResponse results) {
+    return !(StringUtils.isEmpty(results.getResponseAsString()) &&
+             results.getHeaders() == null);
   }
 }

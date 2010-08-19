@@ -17,6 +17,7 @@
  */
 package org.apache.shindig.gadgets.features;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -58,11 +59,10 @@ import java.util.logging.Level;
  */
 @Singleton
 public class FeatureRegistry {
-  public static final char FILE_SEPARATOR = ',';
   public static final String RESOURCE_SCHEME = "res";
   public static final String FILE_SCHEME = "file";
   
-  private static final Logger logger
+  private static final Logger LOG
       = Logger.getLogger("org.apache.shindig.gadgets");
   
   // Map keyed by FeatureNode object created as a lookup for transitive feature deps.
@@ -72,19 +72,20 @@ public class FeatureRegistry {
   private final FeatureResourceLoader resourceLoader;
   private final ImmutableMap<String, FeatureNode> featureMap;
   
-  @Inject
 
 /**
  *
- * @param featureFiles
+ * @param resourceLoader
+ * @param featuresoo
  * @throws GadgetException
  */
+  @Inject
   public FeatureRegistry(FeatureResourceLoader resourceLoader,
-                         @Named("shindig.features.default") String featureFiles) throws GadgetException {
+                         @Named("org.apache.shindig.features") List<String> features) throws GadgetException {
     this.parser = new FeatureParser();
     this.resourceLoader = resourceLoader;
 
-    featureMap = register(featureFiles);
+    featureMap = register(features);
 
     // Connect the dependency graph made up of all features and validate there
     // are no circular deps.
@@ -105,7 +106,7 @@ public class FeatureRegistry {
    * That is, their dependencies must all be valid features as well, and the
    * dependency tree must not contain circular dependencies.
    *
-   * @param resourceKey The file or directory to load the feature from. If feature.xml
+   * @param resourceList The files or directories                                                                                                             to load the feature from. If feature.xml
    *    is passed in directly, it will be loaded as a single feature. If a
    *    directory is passed, any features in that directory (recursively) will
    *    be loaded. If res://*.txt or res:*.txt is passed, we will look for named resources
@@ -115,11 +116,11 @@ public class FeatureRegistry {
    *    them with a comma.
    * @throws GadgetException If any of the files can't be read, are malformed, or invalid.
    */
-  protected ImmutableMap<String,FeatureNode> register(String resourceKey) throws GadgetException {
+  protected ImmutableMap<String,FeatureNode> register(List<String> resourceList) throws GadgetException {
     Map<String,FeatureNode> featureMapBuilder = Maps.newHashMap();
 
     try {
-      for (String location : StringUtils.split(resourceKey, FILE_SEPARATOR)) {
+      for (String location : resourceList) {
         Uri uriLoc = getComponentUri(location);
         
         if (uriLoc.getScheme() != null && uriLoc.getScheme().equals(RESOURCE_SCHEME)) {
@@ -131,7 +132,7 @@ public class FeatureRegistry {
             // Accommodate res:// URIs.
             location = location.substring(1);
           }
-          logger.info("Loading resources from: " + uriLoc.toString());
+          LOG.info("Loading resources from: " + uriLoc.toString());
           
           if (location.endsWith(".txt")) {
             // Text file contains a list of other resource files to load
@@ -150,7 +151,7 @@ public class FeatureRegistry {
           loadResources(resources, featureMapBuilder);
         } else {
           // Load files in directory structure.
-          logger.info("Loading files from: " + location);
+          LOG.info("Loading files from: " + location);
           
           loadFile(new File(uriLoc.getPath()), featureMapBuilder);
         }
@@ -384,9 +385,7 @@ public class FeatureRegistry {
     if (!problems.isEmpty()) {
       StringBuilder sb = new StringBuilder();
       sb.append("Problems found processing features:\n");
-      for (String problem : problems) {
-        sb.append(problem).append('\n');
-      }
+      Joiner.on('\n').appendTo(sb, problems);
       throw new GadgetException(GadgetException.Code.INVALID_CONFIG, sb.toString());
     }
   }
@@ -394,8 +393,8 @@ public class FeatureRegistry {
   private void loadResources(List<String> resources, Map<String,FeatureNode> featureMapBuilder) throws GadgetException {
     try {
       for (String resource : resources) {
-        if (logger.isLoggable(Level.FINE)) {
-          logger.fine("Processing resource: " + resource);
+        if (LOG.isLoggable(Level.FINE)) {
+          LOG.fine("Processing resource: " + resource);
         }
         
         String content = getResourceContent(resource);
@@ -424,8 +423,8 @@ public class FeatureRegistry {
         Uri parent = Uri.fromJavaUri(featureFile.toURI());
         loadFeature(parent, content, featureMapBuilder);
       } else {
-        if (logger.isLoggable(Level.FINEST)) {
-          logger.finest(featureFile.getAbsolutePath() + " doesn't seem to be an XML file.");
+        if (LOG.isLoggable(Level.FINEST)) {
+          LOG.finest(featureFile.getAbsolutePath() + " doesn't seem to be an XML file.");
         }
       }
     }
@@ -443,8 +442,8 @@ public class FeatureRegistry {
     FeatureParser.ParsedFeature parsed = parser.parse(parent, xml);
     // Duplicate feature = OK, just indicate it's being overridden.
     if (featureMapBuilder.containsKey(parsed.getName())) {
-      if (logger.isLoggable(Level.WARNING)) {
-        logger.warning("Overriding feature: " + parsed.getName() + " with def at: " + parent);
+      if (LOG.isLoggable(Level.WARNING)) {
+        LOG.warning("Overriding feature: " + parsed.getName() + " with def at: " + parent);
       }
     }
     
@@ -475,7 +474,7 @@ public class FeatureRegistry {
     return ImmutableMap.<String, String>builder().putAll(bundleAttribs).putAll(resourceAttribs).build();
   }
   
-  private static class InlineFeatureResource extends FeatureResource.Default {
+  private static final class InlineFeatureResource extends FeatureResource.Default {
     private final String content;
     
     private InlineFeatureResource(String content) {
@@ -491,7 +490,7 @@ public class FeatureRegistry {
     }
   }
 
-  private static class FeatureBundle {
+  private static final class FeatureBundle {
     private final String type;
     private final Map<String, String> attribs;
     private final List<FeatureResource> resources;
@@ -515,7 +514,7 @@ public class FeatureRegistry {
     }
   }
   
-  private static class FeatureNode {
+  private static final class FeatureNode {
     private final String name;
     private final List<FeatureBundle> bundles;
     private final List<String> requestedDeps;
@@ -588,11 +587,11 @@ public class FeatureRegistry {
     }
   }
   
-  private static class FeatureCacheKey {
+  private static final class FeatureCacheKey {
     private final Collection<String> needed;
     private final RenderingContext rCtx;
     private final String container;
-    private final Boolean useUnsupported;
+    private final boolean useUnsupported;
     
     private FeatureCacheKey(Collection<String> needed, GadgetContext ctx, boolean useUnsupported) {
       this.needed = needed;
@@ -603,6 +602,9 @@ public class FeatureRegistry {
     
     @Override
     public boolean equals(Object other) {
+      if (other == this) {
+        return true;
+      }
       if (!(other instanceof FeatureCacheKey)) {
         return false;
       }

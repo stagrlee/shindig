@@ -17,6 +17,7 @@
  */
 package org.apache.shindig.protocol;
 
+import com.google.common.base.Objects;
 import org.apache.commons.lang.StringUtils;
 import org.apache.shindig.auth.SecurityToken;
 import org.apache.shindig.protocol.conversion.BeanConverter;
@@ -174,7 +175,7 @@ public class BaseRequestItem implements RequestItem {
 
   public String getFilterValue() {
     String filterValue = getParameter(FILTER_VALUE);
-    return filterValue == null ? "" : filterValue;
+    return Objects.firstNonNull(filterValue, "");
   }
 
   public Set<String> getFields() {
@@ -250,9 +251,7 @@ public class BaseRequestItem implements RequestItem {
     }
     else if (param instanceof List<?>) {
       // Assume it's a list of strings.  This is not type-safe.
-      @SuppressWarnings("unchecked")
-      List<String> listParam = (List<String>) param;
-      return listParam;
+      return (List<String>) param;
     } else if (param instanceof JSONArray) {
       try {
         JSONArray jsonArray = (JSONArray)param;

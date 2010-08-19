@@ -23,7 +23,7 @@
   <parent>
     <groupId>org.apache.shindig</groupId>
     <artifactId>shindig-project</artifactId>
-    <version>1.1-BETA6-SNAPSHOT</version>
+    <version>2.0.0-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
@@ -36,9 +36,9 @@
   </description>
 
   <scm>
-    <connection>scm:svn:http://svn.apache.org/repos/asf/incubator/shindig/trunk/features</connection>
-    <developerConnection>scm:svn:https://svn.apache.org/repos/asf/incubator/shindig/trunk/features</developerConnection>
-    <url>http://svn.apache.org/viewvc/incubator/shindig/trunk/features</url>
+    <connection>scm:svn:http://svn.apache.org/repos/asf/shindig/trunk/features</connection>
+    <developerConnection>scm:svn:https://svn.apache.org/repos/asf/shindig/trunk/features</developerConnection>
+    <url>http://svn.apache.org/viewvc/shindig/trunk/features</url>
   </scm>
 
   <pluginRepositories>
@@ -108,8 +108,10 @@
                 <source>../../../../src/test/javascript/features/mocks/xhr.js</source>
                 <source>globals/globals.js</source>
                 <source>core.config/config.js</source>
+                <source>core.config/configcontainer.js</source>
+                <source>core.config/configgadget.js</source>
                 <source>core.json/json.js</source>
-                <source>core.auth/auth.js</source>
+                <source>shindig.auth/auth.js</source>
                 <source>core.util/util.js</source>
                 <source>core.prefs/prefs.js</source>
                 <source>core.log/log.js</source>
@@ -121,7 +123,8 @@
                 <source>i18n/numberformat.js</source>
                 <source>setprefs/setprefs.js</source>
                 <source>views/views.js</source>
-                <source>xhrwrapper/xhrwrapper.js</source>
+                <source>shindig.uri/uri.js</source>
+                <source>shindig.xhrwrapper/xhrwrapper.js</source>
                 <source>xmlutil/xmlutil.js</source>
                 <source>opensocial-data-context/datacontext.js</source>
                 <source>opensocial-data/data.js</source>
@@ -155,7 +158,7 @@
                 <source>osapi/jsonrpctransport.js</source>
                 <source>osapi/peoplehelpers.js</source>
                 <source>../../../../src/test/javascript/lib/testutils.js</source>
-               <source>oauthpopup/oauthpopup.js</source>
+                <source>oauthpopup/oauthpopup.js</source>
               </sources>
               <testSourceDirectory>${basedir}/src/test/javascript/features</testSourceDirectory>
               <testSuites>

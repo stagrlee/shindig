@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations under the License.
  */
 
-var osapi = osapi || {};
 (function() {
   /**
    * Called by the transports for each service method that they expose
@@ -24,6 +23,13 @@ var osapi = osapi || {};
    * @param {Object.<string,Object>} transport The transport used to execute a call for the method
    */
   osapi._registerMethod = function (method, transport) {
+
+    // Skip registration of local newBatch implementation.
+    if (method == "newBatch") {
+        return;
+    }
+
+    // Lookup last method value.
     var parts = method.split(".");
     var last = osapi;
     for (var i = 0; i < parts.length - 1; i++) {
@@ -68,8 +74,9 @@ var osapi = osapi || {};
     }
 
     if (last[parts[parts.length - 1]]) {
-      gadgets.warn("Duplicate osapi method definition " + method);
+      gadgets.warn("Skipping duplicate osapi method definition " + method + " on transport " + transport.name);
+    } else {
+      last[parts[parts.length - 1]] = apiMethod;
     }
-    last[parts[parts.length - 1]] = apiMethod;
-  }
+  };
 })();

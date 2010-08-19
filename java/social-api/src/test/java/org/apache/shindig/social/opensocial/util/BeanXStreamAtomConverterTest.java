@@ -73,8 +73,14 @@ public class BeanXStreamAtomConverterTest extends Assert {
 
     activity = new ActivityImpl("activityId", johnDoe.getId());
 
-    activity.setMediaItems(Lists.<MediaItem> newArrayList(new MediaItemImpl(
-        "image/jpg", MediaItem.Type.IMAGE, "http://foo.bar")));
+    MediaItemImpl mediaItem = new MediaItemImpl();
+    mediaItem.setMimeType("image/jpg");
+    mediaItem.setType(MediaItem.Type.IMAGE);
+    mediaItem.setUrl("http://foo.bar");
+    mediaItem.setLocation(new AddressImpl("Foo bar address"));
+    mediaItem.setNumViews("10000");
+
+    activity.setMediaItems(Lists.<MediaItem> newArrayList(mediaItem));
     activity.setUrl("http://foo.com");
 
     beanXmlConverter = new BeanXStreamAtomConverter(
@@ -230,6 +236,10 @@ public class BeanXStreamAtomConverterTest extends Assert {
         + "        <mimeType>image/jpg</mimeType>"
         + "        <type>IMAGE</type>"
         + "        <url>http://foo.bar</url>"
+        + "        <location>"
+        + "           <formatted>Foo bar address</formatted>"
+        + "        </location>"
+        + "        <numViews>10000</numViews>"
         + "    </mediaItems>"
         + "    <url>http://foo.com</url>"
         + "    <userId>johnDoeId</userId>"
@@ -240,6 +250,10 @@ public class BeanXStreamAtomConverterTest extends Assert {
         + "        <mimeType>image/jpg</mimeType>"
         + "        <type>IMAGE</type>"
         + "        <url>http://foo.bar</url>"
+        + "        <location>"
+        + "           <formatted>Foo bar address</formatted>"
+        + "        </location>"
+        + "        <numViews>10000</numViews>"
         + "    </mediaItems>"
         + "    <url>http://foo.com</url>"
         + "    <userId>johnDoeId</userId>"
@@ -250,6 +264,10 @@ public class BeanXStreamAtomConverterTest extends Assert {
         + "        <mimeType>image/jpg</mimeType>"
         + "        <type>IMAGE</type>"
         + "        <url>http://foo.bar</url>"
+        + "        <location>"
+        + "           <formatted>Foo bar address</formatted>"
+        + "        </location>"
+        + "        <numViews>10000</numViews>"
         + "    </mediaItems>"
         + "    <url>http://foo.com</url>"
         + "    <userId>johnDoeId</userId>"

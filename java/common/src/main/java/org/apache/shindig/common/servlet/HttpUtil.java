@@ -18,14 +18,25 @@
  */
 package org.apache.shindig.common.servlet;
 
+import com.google.common.base.Preconditions;
+import org.apache.shindig.common.Pair;
+import org.apache.shindig.common.util.DateUtil;
 import org.apache.shindig.common.util.TimeSource;
 
+import com.google.common.collect.Lists;
+
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.util.Collection;
+import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Collection of HTTP utilities
  */
-public class HttpUtil {
+public final class HttpUtil {
+  private HttpUtil() {}
+
   // 1 year.
   private static int defaultTtl = 60 * 60 * 24 * 365;
 
@@ -37,6 +48,10 @@ public class HttpUtil {
 
   public static void setTimeSource(TimeSource timeSource) {
     HttpUtil.timeSource = timeSource;
+  }
+
+  public static TimeSource getTimeSource() {
+    return timeSource;
   }
 
   /**
@@ -71,7 +86,7 @@ public class HttpUtil {
   public static void setCachingHeaders(HttpServletResponse response, int ttl) {
     setCachingHeaders(response, ttl, false);
   }
-  
+
   public static void setNoCache(HttpServletResponse response) {
     setCachingHeaders(response, 0, false);
   }
@@ -86,18 +101,28 @@ public class HttpUtil {
    * @param noProxy True if you don't want the response to be cacheable by proxies.
    */
   public static void setCachingHeaders(HttpServletResponse response, int ttl, boolean noProxy) {
-    response.setDateHeader("Expires", timeSource.currentTimeMillis() + (1000L * ttl));
+    for (Pair<String, String> header : getCachingHeadersToSet(ttl, noProxy)) {
+      response.setHeader(header.one, header.two);
+    }
+  }
+  
+  public static List<Pair<String, String>> getCachingHeadersToSet(int ttl, boolean noProxy) {
+    List<Pair<String, String>> cachingHeaders = Lists.newArrayListWithExpectedSize(3);
+    cachingHeaders.add(Pair.of("Expires",
+        DateUtil.formatRfc1123Date(timeSource.currentTimeMillis() + (1000L * ttl))));
 
-    if (ttl == 0) {
-      response.setHeader("Pragma", "no-cache");
-      response.setHeader("Cache-Control", "no-cache");
+    if (ttl <= 0) {
+      cachingHeaders.add(Pair.of("Pragma", "no-cache"));
+      cachingHeaders.add(Pair.of("Cache-Control", "no-cache"));
     } else {
       if (noProxy) {
-        response.setHeader("Cache-Control", "private,max-age=" + Integer.toString(ttl));
+        cachingHeaders.add(Pair.of("Cache-Control", "private,max-age=" + Integer.toString(ttl)));
       } else {
-        response.setHeader("Cache-Control", "public,max-age=" + Integer.toString(ttl));
+        cachingHeaders.add(Pair.of("Cache-Control", "public,max-age=" + Integer.toString(ttl)));
       }
     }
+    
+    return cachingHeaders;
   }
 
   public static int getDefaultTtl() {
@@ -106,5 +131,43 @@ public class HttpUtil {
 
   public static void setDefaultTtl(int defaultTtl) {
     HttpUtil.defaultTtl = defaultTtl;
+  }
+
+
+  static final Pattern GET_REQUEST_CALLBACK_PATTERN = Pattern.compile("[A-Za-z_][A-Za-z0-9_\\.]+");
+
+  public static boolean isJSONP(HttpServletRequest request) throws IllegalArgumentException {
+    String callback = request.getParameter("callback");
+
+    // Must be a GET
+    if (!"GET".equals(request.getMethod()))
+      return false;
+
+    // No callback specified
+    if (callback == null) return false;
+
+    Preconditions.checkArgument(GET_REQUEST_CALLBACK_PATTERN.matcher(callback).matches(),
+        "Wrong format for parameter 'callback' specified. Must match: " +
+            GET_REQUEST_CALLBACK_PATTERN.toString());
+
+    return true;
+  }
+
+
+  public static final String ACCESS_CONTROL_ALLOW_ORIGIN_HEADER = "Access-Control-Allow-Origin";
+
+  /**
+   * Set the header for Cross-Site Resource Sharing.
+   * @param resp HttpServletResponse to modify
+   * @param validOrigins a space separated list of Origins as defined by the html5 spec
+   * @see http://dev.w3.org/html5/spec/browsers.html#origin-0
+   */
+  public static void setCORSheader(HttpServletResponse resp, Collection<String> validOrigins) {
+    if (validOrigins == null) {
+      return;
+    }
+    for (String origin : validOrigins) {
+      resp.addHeader(ACCESS_CONTROL_ALLOW_ORIGIN_HEADER, origin);
+    }
   }
 }

@@ -18,6 +18,7 @@
  */
 package org.apache.shindig.gadgets.uri;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
 import com.google.common.collect.Lists;
 
@@ -48,6 +49,10 @@ public interface ProxyUriManager {
     private Integer resizeWidth;
     private Integer resizeQuality;
     private boolean resizeNoExpand;
+
+    // If "true" then the original content should be returned to the user
+    // instead of internal server errors.
+    private String returnOriginalContentOnError;
     
     public ProxyUri(Gadget gadget, Uri resource) {
       super(gadget);
@@ -56,7 +61,7 @@ public interface ProxyUriManager {
 
     public ProxyUri(Integer refresh, boolean debug, boolean noCache,
         String container, String gadget, Uri resource) {
-      super(null, refresh, debug, noCache, container, gadget);
+      super(UriStatus.VALID_UNVERSIONED, refresh, debug, noCache, container, gadget);
       this.resource = resource;
     }
 
@@ -64,9 +69,17 @@ public interface ProxyUriManager {
       super(status, base);
       this.resource = resource;
     }
+
+    @VisibleForTesting
+    public void setReturnOriginalContentOnError(boolean returnOriginalContentOnError) {
+      this.returnOriginalContentOnError = returnOriginalContentOnError ? "1" : null;
+    }
     
     @Override
     public boolean equals(Object obj) {
+      if (obj == this) {
+        return true;
+      }
       if (!(obj instanceof ProxyUri)) {
         return false; 
       }
@@ -77,10 +90,16 @@ public interface ProxyUriManager {
           && Objects.equal(this.resizeHeight, objUri.resizeHeight)
           && Objects.equal(this.resizeWidth, objUri.resizeWidth)
           && Objects.equal(this.resizeQuality, objUri.resizeQuality)
-          && Objects.equal(this.resizeWidth, objUri.resizeWidth)
-          && this.resizeNoExpand == objUri.resizeNoExpand);
+          && Objects.equal(this.resizeNoExpand, objUri.resizeNoExpand)
+          && Objects.equal(this.returnOriginalContentOnError, objUri.returnOriginalContentOnError));
     }
-    
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(super.hashCode(), resource, fallbackUrl, resizeHeight,
+              resizeWidth, resizeQuality, resizeNoExpand, returnOriginalContentOnError);
+    }
+
     /* (non-Javadoc)
      * @see org.apache.shindig.gadgets.uri.ProxyUriBase#setFromUri(org.apache.shindig.common.uri.Uri)
      */
@@ -93,6 +112,8 @@ public interface ProxyUriManager {
         resizeWidth = getIntegerValue(uri.getQueryParameter(Param.RESIZE_WIDTH.getKey()));
         resizeQuality = getIntegerValue(uri.getQueryParameter(Param.RESIZE_QUALITY.getKey()));
         resizeNoExpand = getBooleanValue(uri.getQueryParameter(Param.NO_EXPAND.getKey()));
+        returnOriginalContentOnError = uri.getQueryParameter(
+            Param.RETURN_ORIGINAL_CONTENT_ON_ERROR.getKey());
       }
     }
 
@@ -127,6 +148,11 @@ public interface ProxyUriManager {
       }
     }
 
+    public boolean shouldReturnOrigOnErr() {
+      return "1".equals(this.returnOriginalContentOnError) ||
+             "true".equalsIgnoreCase(this.returnOriginalContentOnError);
+    }
+
     @Override
     public UriBuilder makeQueryParams(Integer forcedRefresh, String version) {
       UriBuilder builder = super.makeQueryParams(forcedRefresh, version);
@@ -145,6 +171,10 @@ public interface ProxyUriManager {
       if (fallbackUrl != null) {
         builder.addQueryParameter(Param.FALLBACK_URL_PARAM.getKey(), fallbackUrl);
       }
+      if (returnOriginalContentOnError != null) {
+        builder.addQueryParameter(Param.RETURN_ORIGINAL_CONTENT_ON_ERROR.getKey(),
+                                  returnOriginalContentOnError);
+      }
       return builder;
     }
     
@@ -158,7 +188,7 @@ public interface ProxyUriManager {
       req.setParam(Param.RESIZE_QUALITY.getKey(), resizeQuality);
       req.setParam(Param.NO_EXPAND.getKey(), resizeNoExpand ? "1" : "0");
       return req;
-    };
+    }
     
     
     public static List<ProxyUri> fromList(Gadget gadget, List<Uri> uris) {

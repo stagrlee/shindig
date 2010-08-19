@@ -30,20 +30,9 @@ public class CajaSocialMarkupHtmlParserTest extends AbstractSocialMarkupHtmlPars
   protected GadgetHtmlParser makeParser() {
     return new CajaHtmlParser(new ParseModule.DOMImplementationProvider().get());
   }
-
+  
   @Test
   @Override
-  @Ignore("Until xmlnamespace issues have been resolved")
-  public void testSocialData() { super.testSocialData(); }
-
-  @Test
-  @Override
-  @Ignore("Until xmlnamespace issues have been resolved")
-  public void testSocialTemplate() { super.testSocialTemplate(); }
-
-  @Test
-  @Override
-  @Ignore("Until xmlnamespace issues have been resolved")
+  @Ignore("Look into treating DOMException in Caja parser as Error not Warning")
   public void testInvalid() throws Exception { super.testInvalid(); }
-
 }

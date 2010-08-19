@@ -18,13 +18,13 @@
 package org.apache.shindig.social.core.oauth;
 
 import com.google.inject.Inject;
-import com.google.inject.name.Named;
 
 import net.oauth.OAuth;
 import net.oauth.OAuthAccessor;
 import net.oauth.OAuthConsumer;
 import net.oauth.OAuthException;
 import net.oauth.OAuthMessage;
+import net.oauth.OAuthValidator;
 import net.oauth.SimpleOAuthValidator;
 import net.oauth.OAuthProblemException;
 import net.oauth.server.OAuthServlet;
@@ -56,14 +56,9 @@ public class OAuthAuthenticationHandler implements AuthenticationHandler {
 
   private final OAuthDataStore store;
 
-  @Deprecated
-  private final boolean allowLegacyBodySigning;
-
   @Inject
-  public OAuthAuthenticationHandler(OAuthDataStore store,
-      @Named("shindig.oauth.legacy-body-signing") boolean allowLegacyBodySigning) {
+  public OAuthAuthenticationHandler(OAuthDataStore store) {
     this.store = store;
-    this.allowLegacyBodySigning = allowLegacyBodySigning;
   }
 
   public String getName() {
@@ -75,7 +70,7 @@ public class OAuthAuthenticationHandler implements AuthenticationHandler {
   }
 
   public SecurityToken getSecurityTokenFromRequest(HttpServletRequest request)
-      throws InvalidAuthenticationException {
+    throws InvalidAuthenticationException {
     OAuthMessage message = OAuthServlet.getMessage(request, null);
     if (StringUtils.isEmpty(getParameter(message, OAuth.OAUTH_SIGNATURE))) {
       // Is not an oauth request
@@ -88,45 +83,25 @@ public class OAuthAuthenticationHandler implements AuthenticationHandler {
     try {
       return verifyMessage(message);
     } catch (OAuthProblemException oauthException) {
-      // Legacy body signing is intended for backwards compatability with opensocial clients
-      // that assumed they could use the raw request body as a pseudo query param to get
-      // body signing. This assumption was born out of the limitations of the OAuth 1.0 spec which
-      // states that request bodies are only signed if they are form-encoded. This lead many clients
-      // to force a content type of application/x-www-form-urlencoded for xml/json bodies and then
-      // hope that receiver decoding of the body didnt have encoding issues. This didn't work out
-      // to well so now these clients are required to specify the correct content type. This code
-      // lets clients which sign using the old technique to work if they specify the correct content
-      // type. This support is deprecated and should be removed later.
-      if (allowLegacyBodySigning &&
-          (StringUtils.isEmpty(request.getContentType())  ||
-          !request.getContentType().contains(OAuth.FORM_ENCODED))) {
-        try {
-          message.addParameter(readBodyString(request), "");
-          return verifyMessage(message);
-        } catch (OAuthProblemException ioe) {
-          // ignore, let original exception be thrown
-        } catch (IOException e) {
-          // also ignore;
-        }
-      }
       throw new InvalidAuthenticationException("OAuth Authentication Failure", oauthException);
     }
   }
 
   protected SecurityToken verifyMessage(OAuthMessage message)
-      throws OAuthProblemException {
+    throws OAuthProblemException {
     OAuthEntry entry = getOAuthEntry(message);
     OAuthConsumer authConsumer = getConsumer(message);
 
     OAuthAccessor accessor = new OAuthAccessor(authConsumer);
 
     if (entry != null) {
-      accessor.tokenSecret = entry.tokenSecret;
-      accessor.accessToken = entry.token;
+      accessor.tokenSecret = entry.getTokenSecret();
+      accessor.accessToken = entry.getToken();
     }
 
     try {
-      message.validateMessage(accessor, new SimpleOAuthValidator());
+      OAuthValidator validator = new SimpleOAuthValidator();
+      validator.validateMessage(message, accessor);
     } catch (OAuthProblemException e) {
       throw e;
     } catch (OAuthException e) {
@@ -154,7 +129,7 @@ public class OAuthAuthenticationHandler implements AuthenticationHandler {
         OAuthProblemException e = new OAuthProblemException(OAuth.Problems.TOKEN_REJECTED);
         e.setParameter(OAuth.Problems.OAUTH_PROBLEM_ADVICE, "cannot find token");
         throw e;
-      } else if (entry.type != OAuthEntry.Type.ACCESS) {
+      } else if (entry.getType() != OAuthEntry.Type.ACCESS) {
         OAuthProblemException e = new OAuthProblemException(OAuth.Problems.TOKEN_REJECTED);
         e.setParameter(OAuth.Problems.OAUTH_PROBLEM_ADVICE, "token is not an access token");
         throw e;
@@ -175,10 +150,10 @@ public class OAuthAuthenticationHandler implements AuthenticationHandler {
   }
 
   protected SecurityToken getTokenFromVerifiedRequest(OAuthMessage message, OAuthEntry entry,
-      OAuthConsumer authConsumer) throws OAuthProblemException {
+                                                      OAuthConsumer authConsumer) throws OAuthProblemException {
     if (entry != null) {
-      return new OAuthSecurityToken(entry.userId, entry.callbackUrl, entry.appId,
-          entry.domain, entry.container);
+      return new OAuthSecurityToken(entry.getUserId(), entry.getCallbackUrl(), entry.getAppId(),
+                                    entry.getDomain(), entry.getContainer(), entry.expiresAt().getTime());
     } else {
       String userId = getParameter(message, REQUESTOR_ID_PARAM);
       return store.getSecurityTokenForConsumerRequest(authConsumer.consumerKey, userId);
@@ -200,12 +175,12 @@ public class OAuthAuthenticationHandler implements AuthenticationHandler {
   }
 
   public static void verifyBodyHash(HttpServletRequest request, String oauthBodyHash)
-      throws InvalidAuthenticationException {
+    throws InvalidAuthenticationException {
     // we are doing body hash signing which is not permitted for form-encoded data
     if (request.getContentType() != null && request.getContentType().contains(OAuth.FORM_ENCODED)) {
       throw new AuthenticationHandler.InvalidAuthenticationException(
-          "Cannot use oauth_body_hash with a Content-Type of application/x-www-form-urlencoded",
-          null);
+        "Cannot use oauth_body_hash with a Content-Type of application/x-www-form-urlencoded",
+        null);
     } else {
       try {
         byte[] rawBody = readBody(request);

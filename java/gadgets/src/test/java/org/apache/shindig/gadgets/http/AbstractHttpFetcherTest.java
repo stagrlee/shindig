@@ -36,7 +36,7 @@ import org.junit.Test;
  */
 public abstract class AbstractHttpFetcherTest {
   private static final int ECHO_PORT = 9003;
-  private static final Uri BASE_URL = Uri.parse("http://localhost:9003/");
+  protected static final Uri BASE_URL = Uri.parse("http://localhost:9003/");
   private static EchoServer server;
   protected HttpFetcher fetcher = null;
 
@@ -57,7 +57,7 @@ public abstract class AbstractHttpFetcherTest {
     Uri uri = Uri.parse("http://a:b:c/");
     HttpRequest request = new HttpRequest(uri);
     try {
-      HttpResponse response = fetcher.fetch(request);
+      fetcher.fetch(request);
       fail("Expected GadgetException");
     } catch (GadgetException e) {
       assertEquals(400, e.getHttpStatusCode());
@@ -69,7 +69,7 @@ public abstract class AbstractHttpFetcherTest {
     Uri uri = Uri.parse("http://a:b/");
     HttpRequest request = new HttpRequest(uri);
     try {
-      HttpResponse response = fetcher.fetch(request);
+      fetcher.fetch(request);
       fail("Expected GadgetException");
     } catch (GadgetException e) {
       assertEquals(400, e.getHttpStatusCode());
@@ -81,7 +81,7 @@ public abstract class AbstractHttpFetcherTest {
     Uri uri = Uri.parse("host/data");
     HttpRequest request = new HttpRequest(uri);
     try {
-      HttpResponse response = fetcher.fetch(request);
+      fetcher.fetch(request);
       fail("Expected GadgetException");
     } catch (GadgetException e) {
       assertEquals(400, e.getHttpStatusCode());
@@ -93,7 +93,7 @@ public abstract class AbstractHttpFetcherTest {
     Uri uri = Uri.parse("//host/data");
     HttpRequest request = new HttpRequest(uri);
     try {
-      HttpResponse response = fetcher.fetch(request);
+      fetcher.fetch(request);
       fail("Expected GadgetException");
     } catch (GadgetException e) {
       assertEquals(400, e.getHttpStatusCode());

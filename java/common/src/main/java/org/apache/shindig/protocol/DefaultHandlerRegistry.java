@@ -18,6 +18,7 @@
  */
 package org.apache.shindig.protocol;
 
+import com.google.common.base.Preconditions;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.shindig.auth.SecurityToken;
@@ -26,6 +27,7 @@ import org.apache.shindig.protocol.conversion.BeanConverter;
 import org.apache.shindig.protocol.conversion.BeanJsonConverter;
 import org.apache.shindig.protocol.multipart.FormDataItem;
 
+import com.google.common.base.Objects;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -57,7 +59,7 @@ import javax.servlet.http.HttpServletResponse;
  */
 public class DefaultHandlerRegistry implements HandlerRegistry {
 
-  private static final Logger logger = Logger.getLogger(DefaultHandlerRegistry.class.getName());
+  private static final Logger LOG = Logger.getLogger(DefaultHandlerRegistry.class.getName());
 
   // Map service - > method -> { handler, ...}
   private final Map<String, Map<String, SortedSet<RestPath>>> serviceMethodPathMap =
@@ -101,10 +103,9 @@ public class DefaultHandlerRegistry implements HandlerRegistry {
           }
         };
       }
-      if (!handlerType.isAnnotationPresent(Service.class)) {
-        throw new IllegalStateException("Attempt to bind unannotated service implementation " +
-            handlerType.getName());
-      }
+      Preconditions.checkState(handlerType.isAnnotationPresent(Service.class),
+          "Attempt to bind unannotated service implementation %s",handlerType.getName());
+
       Service service = handlerType.getAnnotation(Service.class);
 
       for (Method m : handlerType.getMethods()) {
@@ -215,7 +216,7 @@ public class DefaultHandlerRegistry implements HandlerRegistry {
         }
       }
     } catch (NoSuchMethodException nme) {
-      logger.log(Level.INFO, "No REST binding for " + service.name() + '.' + m.getName());
+      LOG.log(Level.INFO, "No REST binding for " + service.name() + '.' + m.getName());
     }
 
   }
@@ -235,7 +236,7 @@ public class DefaultHandlerRegistry implements HandlerRegistry {
               new ExecutionListenerWrapper(service.name(), opName, executionListener));
       rpcOperations.put(service.name() + '.' + opName, rpcHandler);
     } catch (NoSuchMethodException nme) {
-      logger.log(Level.INFO, "No RPC binding for " + service.name() + '.' + m.getName());
+      LOG.log(Level.INFO, "No RPC binding for " + service.name() + '.' + m.getName());
     }
   }
 
@@ -350,18 +351,26 @@ public class DefaultHandlerRegistry implements HandlerRegistry {
 
     public Future<?> execute(Map<String, String[]> parameters, Reader body,
                              SecurityToken token, BeanConverter converter) {
+
+      RequestItem item;
       try {
         // bind the body contents if available
         if (body != null) {
           parameters.put(operation.bodyParam(), new String[]{IOUtils.toString(body)});
         }
-        RequestItem item = methodCaller.getRestRequestItem(parameters, token, converter,
+        item = methodCaller.getRestRequestItem(parameters, token, converter,
             beanJsonConverter);
-        listener.executing(item);
+        } catch (Exception e) {
+          return ImmediateFuture.errorInstance(e);
+        }
 
+      try {
+        listener.executing(item);
         return methodCaller.call(handlerProvider.get(), item);
       } catch (Exception e) {
         return ImmediateFuture.errorInstance(e);
+      } finally {
+          listener.executed(item);
       }
     }
   }
@@ -612,6 +621,22 @@ public class DefaultHandlerRegistry implements HandlerRegistry {
       return new RestInvocationWrapper(parsedParams, handler);
     }
 
+    @Override
+    public boolean equals(Object other) {
+      if (other instanceof RestPath) {
+        RestPath that = (RestPath)other;
+        return (this.constCount == that.constCount &&
+            this.lastConstIndex == that.lastConstIndex &&
+            Objects.equal(this.operationPath, that.operationPath));
+      }
+      return false;
+    }
+    
+    @Override
+    public int hashCode() {
+      return this.constCount ^ this.lastConstIndex ^ operationPath.hashCode();
+    }
+    
     /**
      * Rank based on the number of consant parts they accept, where the constant parts occur
      * and lexical ordering.

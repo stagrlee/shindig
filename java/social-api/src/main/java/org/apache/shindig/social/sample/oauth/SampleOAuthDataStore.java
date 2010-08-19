@@ -45,10 +45,10 @@ public class SampleOAuthDataStore implements OAuthDataStore {
   // This needs to be long enough that an attacker can't guess it.  If the attacker can guess this
   // value before they exceed the maximum number of attempts, they can complete a session fixation
   // attack against a user.
-  private final int CALLBACK_TOKEN_LENGTH = 6;
+  private static final int CALLBACK_TOKEN_LENGTH = 6;
   
   // We limit the number of trials before disabling the request token.
-  private final int CALLBACK_TOKEN_ATTEMPTS = 5;
+  private static final int CALLBACK_TOKEN_ATTEMPTS = 5;
   
   // used to get samplecontainer data from canonicaldb.json
   private final JsonDbOpensocialService service;
@@ -75,7 +75,7 @@ public class SampleOAuthDataStore implements OAuthDataStore {
       String consumerSecret = app.getString("consumerSecret");
 
       if (consumerSecret == null)
-          return null;
+        return null;
 
       // null below is for the callbackUrl, which we don't have in the db
       OAuthConsumer consumer = new OAuthConsumer(null, consumerKey, consumerSecret, SERVICE_PROVIDER);
@@ -89,49 +89,49 @@ public class SampleOAuthDataStore implements OAuthDataStore {
       return consumer;
 
     } catch (JSONException e) {
-       return null;
+      return null;
     }
   }
 
   // Generate a valid requestToken for the given consumerKey
   public OAuthEntry generateRequestToken(String consumerKey, String oauthVersion,
-      String signedCallbackUrl) {
+                                         String signedCallbackUrl) {
     OAuthEntry entry = new OAuthEntry();
-    entry.appId = consumerKey;
-    entry.consumerKey = consumerKey;
-    entry.domain = "samplecontainer.com";
-    entry.container = "default";
+    entry.setAppId(consumerKey);
+    entry.setConsumerKey(consumerKey);
+    entry.setDomain("samplecontainer.com");
+    entry.setContainer("default");
 
-    entry.token = UUID.randomUUID().toString();
-    entry.tokenSecret = UUID.randomUUID().toString();
-      
-    entry.type = OAuthEntry.Type.REQUEST;
-    entry.issueTime = new Date();
-    entry.oauthVersion = oauthVersion;
+    entry.setToken(UUID.randomUUID().toString());
+    entry.setTokenSecret(UUID.randomUUID().toString());
+
+    entry.setType(OAuthEntry.Type.REQUEST);
+    entry.setIssueTime(new Date());
+    entry.setOauthVersion(oauthVersion);
     if (signedCallbackUrl != null) {
-      entry.callbackUrlSigned = true;
-      entry.callbackUrl = signedCallbackUrl;
+      entry.setCallbackUrlSigned(true);
+      entry.setCallbackUrl(signedCallbackUrl);
     }
 
-    oauthEntries.put(entry.token, entry);
+    oauthEntries.put(entry.getToken(), entry);
     return entry;
   }
 
   // Turns the request token into an access token
   public OAuthEntry convertToAccessToken(OAuthEntry entry) {
     Preconditions.checkNotNull(entry);
-    Preconditions.checkState(entry.type == OAuthEntry.Type.REQUEST, "Token must be a request token");
+    Preconditions.checkState(entry.getType() == OAuthEntry.Type.REQUEST, "Token must be a request token");
 
     OAuthEntry accessEntry = new OAuthEntry(entry);
 
-    accessEntry.token = UUID.randomUUID().toString();
-    accessEntry.tokenSecret = UUID.randomUUID().toString();
+    accessEntry.setToken(UUID.randomUUID().toString());
+    accessEntry.setTokenSecret(UUID.randomUUID().toString());
 
-    accessEntry.type = OAuthEntry.Type.ACCESS;
-    accessEntry.issueTime = new Date();
+    accessEntry.setType(OAuthEntry.Type.ACCESS);
+    accessEntry.setIssueTime(new Date());
 
-    oauthEntries.remove(entry.token);
-    oauthEntries.put(accessEntry.token, accessEntry);
+    oauthEntries.remove(entry.getToken());
+    oauthEntries.put(accessEntry.getToken(), accessEntry);
 
     return accessEntry;
   }
@@ -139,27 +139,27 @@ public class SampleOAuthDataStore implements OAuthDataStore {
   // Authorize the request token for the given user id
   public void authorizeToken(OAuthEntry entry, String userId) {
     Preconditions.checkNotNull(entry);
-    entry.authorized = true;
-    entry.userId = Preconditions.checkNotNull(userId);
-    if (entry.callbackUrlSigned) {
-      entry.callbackToken = Crypto.getRandomDigits(CALLBACK_TOKEN_LENGTH);
+    entry.setAuthorized(true);
+    entry.setUserId(Preconditions.checkNotNull(userId));
+    if (entry.isCallbackUrlSigned()) {
+      entry.setCallbackToken(Crypto.getRandomDigits(CALLBACK_TOKEN_LENGTH));
     }
   }
 
   public void disableToken(OAuthEntry entry) {
     Preconditions.checkNotNull(entry);
-    ++entry.callbackTokenAttempts;
-    if (!entry.callbackUrlSigned || entry.callbackTokenAttempts >= CALLBACK_TOKEN_ATTEMPTS) {
-      entry.type = OAuthEntry.Type.DISABLED;
+    entry.setCallbackTokenAttempts(entry.getCallbackTokenAttempts() + 1);
+    if (!entry.isCallbackUrlSigned() || entry.getCallbackTokenAttempts() >= CALLBACK_TOKEN_ATTEMPTS) {
+      entry.setType(OAuthEntry.Type.DISABLED);
     }
 
-    oauthEntries.put(entry.token, entry);
+    oauthEntries.put(entry.getToken(), entry);
   }
 
   public void removeToken(OAuthEntry entry) {
     Preconditions.checkNotNull(entry);
 
-    oauthEntries.remove(entry.token);
+    oauthEntries.remove(entry.getToken());
   }
 
   // Return the proper security token for a 2 legged oauth request that has been validated
@@ -169,8 +169,8 @@ public class SampleOAuthDataStore implements OAuthDataStore {
     String domain = "samplecontainer.com";
     String container = "default";
 
-    return new OAuthSecurityToken(userId, null, consumerKey, domain, container,
-        AuthenticationMode.OAUTH_CONSUMER_REQUEST.name());
-    
+    return new OAuthSecurityToken(userId, null, consumerKey, domain, container, null,
+                                  AuthenticationMode.OAUTH_CONSUMER_REQUEST.name());
+
   }
 }

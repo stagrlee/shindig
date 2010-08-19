@@ -31,7 +31,6 @@ import org.apache.shindig.gadgets.http.HttpResponse;
 import org.apache.shindig.gadgets.http.RequestPipeline;
 import org.apache.shindig.gadgets.oauth.OAuthArguments;
 import org.apache.shindig.gadgets.preload.PipelineExecutor;
-import org.apache.shindig.gadgets.servlet.HttpGadgetContext;
 import org.apache.shindig.gadgets.spec.PipelinedData;
 import org.apache.shindig.gadgets.spec.View;
 
@@ -152,7 +151,7 @@ public class ProxyRenderer {
     if (userAgent != null) {
       String myIdent = getUAIdent();
       if (myIdent != null) {
-        userAgent = userAgent + " " + myIdent;
+        userAgent = userAgent + ' ' + myIdent;
       }
       request.setHeader("User-Agent", userAgent);
     }

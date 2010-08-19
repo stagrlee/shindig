@@ -59,18 +59,32 @@
 
 // DNS domain on which gadgets should render.
 "gadgets.lockedDomainSuffix" : "-a.example.com:8080",
+	
+// Origins for CORS requests and/or Referer validation
+// Indicate a set of origins or an entry with * to indicate that all origins are allowed
+"gadgets.parentOrigins" : ["*"],
 
 // Various urls generated throughout the code base.
 // iframeBaseUri will automatically have the host inserted
 // if locked domain is enabled and the implementation supports it.
 // query parameters will be added.
 "gadgets.iframeBaseUri" : "/gadgets/ifr",
+"gadgets.uri.iframe.basePath" : "/gadgets/ifr",
 
 // jsUriTemplate will have %host% and %js% substituted.
 // No locked domain special cases, but jsUriTemplate must
 // never conflict with a lockedDomainSuffix.
 "gadgets.jsUriTemplate" : "http://%host%/gadgets/js/%js%",
 
+//New configuration for iframeUri generation:
+"gadgets.uri.iframe.lockedDomainSuffix" :  "-a.example.com:8080",
+"gadgets.uri.iframe.unlockedDomain" : "www.example.com:8080",
+"gadgets.uri.iframe.basePath" : "/gadgets/ifr",
+
+"gadgets.uri.js.host" : "http://www.example.com/",
+"gadgets.uri.js.path" : "/gadgets/js",
+	
+	
 // Callback URL.  Scheme relative URL for easy switch between https/http.
 "gadgets.oauthGadgetCallbackTemplate" : "//%host%/gadgets/oauthcallback",
 
@@ -80,17 +94,35 @@
 // Config param to load Opensocial data for social
 // preloads in data pipelining.  %host% will be
 // substituted with the current host.
-"gadgets.osDataUri" : "http://%host%/social/rpc",
+"gadgets.osDataUri" : "http://%host%/rpc",
 
 // Uncomment these to switch to a secure version
 //
 //"gadgets.securityTokenType" : "secure",
 //"gadgets.securityTokenKeyFile" : "/path/to/key/file.txt",
 
+// URI for the default shindig test instance.
+"defaultShindigTestHost": "http://${SERVER_HOST}:${SERVER_PORT}",
+
+// Authority (host:port without scheme) for the proxy and concat servlets.
+"defaultShindigProxyConcatAuthority": "${SERVER_HOST}:${SERVER_PORT}",
+
+// Default Uri config: these must be overridden - specified here for testing purposes
+"gadgets.uri.iframe.unlockedDomain": "${Cur['defaultShindigTestHost']}",
+"gadgets.uri.iframe.lockedDomainSuffix": "${Cur['defaultShindigTestHost']}",
+
+// Default Js Uri config: also must be overridden.
+"gadgets.uri.js.host": "${Cur['defaultShindigTestHost']}",
+"gadgets.uri.js.path": "/gadgets/js",
 
 // Default concat Uri config; used for testing.
-"gadgets.uri.concat.host" : "localhost:9003",
+"gadgets.uri.concat.host" : "${Cur['defaultShindigProxyConcatAuthority']}",
 "gadgets.uri.concat.path" : "/gadgets/concat",
+"gadgets.uri.concat.js.splitToken" : "false",
+
+// Default proxy Uri config; used for testing.
+"gadgets.uri.proxy.host" : "${Cur['defaultShindigProxyConcatAuthority']}",
+"gadgets.uri.proxy.path" : "/gadgets/proxy",
 
 // This config data will be passed down to javascript. Please
 // configure your object using the feature name rather than
@@ -117,6 +149,74 @@
       "aliases" : ["FULL_PAGE"]
     }
   },
+  "tabs": {
+    "css" : [
+      ".tablib_table {",
+      "width: 100%;",
+      "border-collapse: separate;",
+      "border-spacing: 0px;",
+      "empty-cells: show;",
+      "font-size: 11px;",
+      "text-align: center;",
+    "}",
+    ".tablib_emptyTab {",
+      "border-bottom: 1px solid #676767;",
+      "padding: 0px 1px;",
+    "}",
+    ".tablib_spacerTab {",
+      "border-bottom: 1px solid #676767;",
+      "padding: 0px 1px;",
+      "width: 1px;",
+    "}",
+    ".tablib_selected {",
+      "padding: 2px;",
+      "background-color: #ffffff;",
+      "border: 1px solid #676767;",
+      "border-bottom-width: 0px;",
+      "color: #3366cc;",
+      "font-weight: bold;",
+      "width: 80px;",
+      "cursor: default;",
+    "}",
+    ".tablib_unselected {",
+      "padding: 2px;",
+      "background-color: #dddddd;",
+      "border: 1px solid #aaaaaa;",
+      "border-bottom-color: #676767;",
+      "color: #000000;",
+      "width: 80px;",
+      "cursor: pointer;",
+    "}",
+    ".tablib_navContainer {",
+      "width: 10px;",
+      "vertical-align: middle;",
+    "}",
+    ".tablib_navContainer a:link, ",
+    ".tablib_navContainer a:visited, ",
+    ".tablib_navContainer a:hover {",
+      "color: #3366aa;",
+      "text-decoration: none;",
+    "}"
+    ]
+  },
+  "minimessage": {
+      "css": [
+        ".mmlib_table {",
+        "width: 100%;",
+        "font: bold 9px arial,sans-serif;",
+        "background-color: #fff4c2;",
+        "border-collapse: separate;",
+        "border-spacing: 0px;",
+        "padding: 1px 0px;",
+      "}",
+      ".mmlib_xlink {",
+        "font: normal 1.1em arial,sans-serif;",
+        "font-weight: bold;",
+        "color: #0000cc;",
+        "cursor: pointer;",
+      "}"
+     ]
+  },
   "rpc" : {
     // Path to the relay file. Automatically appended to the parent
     // parameter if it passes input validation and is not null.
@@ -142,9 +242,9 @@
   "opensocial" : {
     // Path to fetch opensocial data from
     // Must be on the same domain as the gadget rendering server
-    "path" : "http://%host%/social/rpc",
+    "path" : "http://%host%/rpc",
     // Path to issue invalidate calls
-    "invalidatePath" : "http://%host%/gadgets/api/rpc",
+    "invalidatePath" : "http://%host%/rpc",
     "domain" : "shindig",
     "enableCaja" : false,
     "supportedFields" : {
@@ -156,7 +256,7 @@
     // Specifying a binding to "container.listMethods" instructs osapi to dynamicaly introspect the services
     // provided by the container and delay the gadget onLoad handler until that introspection is
     // complete.
-    // Alternatively a container can directly configure services here rather than having them 
+    // Alternatively a container can directly configure services here rather than having them
     // introspected. Simply list out the available servies and omit "container.listMethods" to
     // avoid the initialization delay caused by gadgets.rpc
     // E.g. "gadgets.rpc" : ["activities.requestCreate", "messages.requestSend", "requestShareApp", "requestPermission"]
@@ -164,7 +264,7 @@
   },
   "osapi" : {
     // The endpoints to query for available JSONRPC/REST services
-    "endPoints" : [ "http://%host%/social/rpc", "http://%host%/gadgets/api/rpc" ]                   
+    "endPoints" : [ "http://%host%/rpc" ]
   },
   "osml": {
     // OSML library resource.  Can be set to null or the empty string to disable OSML

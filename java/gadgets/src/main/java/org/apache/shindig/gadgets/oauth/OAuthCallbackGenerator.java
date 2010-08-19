@@ -21,13 +21,12 @@ package org.apache.shindig.gadgets.oauth;
 import com.google.inject.ImplementedBy;
 
 import org.apache.shindig.gadgets.http.HttpRequest;
-import org.apache.shindig.gadgets.oauth.OAuthResponseParams.OAuthRequestException;
 
 /**
  * Figures out the OAuth callback URL to send service providers.
  */
 @ImplementedBy(GadgetOAuthCallbackGenerator.class)
 public interface OAuthCallbackGenerator {  
-  public String generateCallback(OAuthFetcherConfig fetcherConfig, String baseCallback,
+  String generateCallback(OAuthFetcherConfig fetcherConfig, String baseCallback,
       HttpRequest request, OAuthResponseParams responseParams) throws OAuthRequestException;
 }

@@ -27,12 +27,14 @@ class GadgetSpecException extends Exception {
  */
 class GadgetSpecParser {
 
+  protected $context;
+
   /**
    * Parses the $xmlContent into a Gadget class
    *
    * @param string $xmlContent
    */
-  public function parse($xmlContent) {
+  public function parse($xmlContent, GadgetContext $context) {
     libxml_use_internal_errors(true);
     $doc = new DOMDocument();
     if (! $doc->loadXML($xmlContent, LIBXML_NOCDATA)) {
@@ -41,10 +43,10 @@ class GadgetSpecParser {
     //TODO: we could do a XSD schema validation here, but both the schema and most of the gadgets seem to have some form of schema
     // violatons, so it's not really practical yet (and slow)
     // $doc->schemaValidate('gadget.xsd');
-    $gadget = new GadgetSpec();
+    $gadgetSpecClass = Config::get('gadget_spec_class');
+    $gadget = new $gadgetSpecClass();
     $gadget->checksum = md5($xmlContent);
     $this->parseModulePrefs($doc, $gadget);
-    $this->parseLinks($doc, $gadget);
     $this->parseUserPrefs($doc, $gadget);
     $this->parseViews($doc, $gadget);
     //TODO: parse pipelined data
@@ -137,12 +139,12 @@ class GadgetSpecParser {
   /**
    * Parses the link spec elements
    *
-   * @param DOMDocument $doc
+   * @param DOMElement $modulePrefs
    * @param GadgetSpec $gadget
    */
-  private function parseLinks(DOMDocument &$doc, GadgetSpec &$gadget) {
+  private function parseLinks(DOMElement &$modulePrefs, GadgetSpec &$gadget) {
     $gadget->links = array();
-    if (($links = $doc->getElementsByTagName('link')) != null) {
+    if (($links = $modulePrefs->getElementsByTagName('Link')) != null) {
       foreach ($links as $linkNode) {
         $gadget->links[] = array('rel' => $linkNode->getAttribute('rel'),
             'href' => $linkNode->getAttribute('href'),
@@ -183,6 +185,7 @@ class GadgetSpecParser {
       }
     }
     // And parse the child nodes
+    $this->parseLinks($modulePrefs, $gadget);
     $this->parseIcon($modulePrefs, $gadget);
     $this->parseFeatures($modulePrefs, $gadget);
     $this->parsePreloads($modulePrefs, $gadget);

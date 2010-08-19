@@ -35,7 +35,7 @@ import org.apache.shindig.social.opensocial.spi.GroupId;
 import org.apache.shindig.social.opensocial.spi.PersonService;
 import org.apache.shindig.social.opensocial.spi.UserId;
 
-import com.google.common.base.Preconditions;
+import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 
@@ -74,7 +74,7 @@ public class PersonHandler {
       if (optionalPersonId.isEmpty()) {
         if (groupId.getType() == GroupId.Type.self) {
             // If a filter is set then we have to call getPeople(), otherwise use the simpler getPerson()
-          if (options != null && options.getFilter() != null) {
+          if (options.getFilter() != null) {
             Future<RestfulCollection<Person>> people = personService.getPeople(
                 userIds, groupId, options, fields, request.getToken());
             return FutureUtil.getFirstFromCollection(people);
@@ -111,12 +111,8 @@ public class PersonHandler {
   @Operation(httpMethods = "GET", path="/@supportedFields")
   public List<Object> supportedFields(RequestItem request) {
     // TODO: Would be nice if name in config matched name of service.
-    String container = firstNonNull(request.getToken().getContainer(), "default");
+    String container = Objects.firstNonNull(request.getToken().getContainer(), "default");
     return config.getList(container,
         "${Cur['gadgets.features'].opensocial.supportedFields.person}");
-  }
-
-  private static <T> T firstNonNull(T first, T second) {
-    return first != null ? first : Preconditions.checkNotNull(second);
   }
 }

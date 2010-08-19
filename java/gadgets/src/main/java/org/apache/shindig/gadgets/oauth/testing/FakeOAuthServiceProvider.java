@@ -27,6 +27,7 @@ import net.oauth.OAuthConsumer;
 import net.oauth.OAuthException;
 import net.oauth.OAuthMessage;
 import net.oauth.OAuthServiceProvider;
+import net.oauth.OAuthValidator;
 import net.oauth.SimpleOAuthValidator;
 import net.oauth.OAuth.Parameter;
 import net.oauth.signature.RSA_SHA1;
@@ -38,6 +39,9 @@ import org.apache.commons.io.IOUtils;
 import org.apache.shindig.auth.OAuthConstants;
 import org.apache.shindig.auth.OAuthUtil;
 import org.apache.shindig.auth.OAuthUtil.SignatureType;
+import org.apache.shindig.common.cache.LruCache;
+import org.apache.shindig.common.cache.SoftExpiringCache;
+import org.apache.shindig.common.cache.SoftExpiringCache.CachedObject;
 import org.apache.shindig.common.crypto.Crypto;
 import org.apache.shindig.common.uri.UriBuilder;
 import org.apache.shindig.common.util.CharsetUtil;
@@ -56,10 +60,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
 
 public class FakeOAuthServiceProvider implements HttpFetcher {
-
-
 
   public static final String BODY_ECHO_HEADER = "X-Echoed-Body";
 
@@ -120,7 +123,6 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
 
   private class TokenState {
     String tokenSecret;
-    OAuthConsumer consumer;
     State state;
     String userData;
     String sessionHandle;
@@ -128,9 +130,8 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
     String callbackUrl;
     String verifier;
 
-    public TokenState(String tokenSecret, OAuthConsumer consumer, String callbackUrl) {
+    public TokenState(String tokenSecret, String callbackUrl) {
       this.tokenSecret = tokenSecret;
-      this.consumer = consumer;
       this.state = State.PENDING;
       this.userData = null;
       this.callbackUrl = callbackUrl;
@@ -183,6 +184,7 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
   private final OAuthConsumer signedFetchConsumer;
   private final OAuthConsumer oauthConsumer;
   private final TimeSource clock;
+  private final SoftExpiringCache<String, OAuthMessage> nonceCache;
 
   private boolean unauthorized = false;
   private boolean throttled = false;
@@ -223,6 +225,9 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
     tokenState = Maps.newHashMap();
     validParamLocations = Sets.newHashSet();
     validParamLocations.add(OAuthParamLocation.URI_QUERY);
+    nonceCache =
+        new SoftExpiringCache<String, OAuthMessage>(new LruCache<String, OAuthMessage>(10000));
+    nonceCache.setTimeSource(clock);
   }
 
   public void setVagueErrors(boolean vagueErrors) {
@@ -304,23 +309,23 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
       consumer = oauthConsumer;
     } else {
       return makeOAuthProblemReport(
-          OAuthConstants.PROBLEM_CONSUMER_KEY_UNKNOWN, "invalid consumer: " + requestConsumer,
+          OAuth.Problems.CONSUMER_KEY_UNKNOWN, "invalid consumer: " + requestConsumer,
           HttpResponse.SC_FORBIDDEN);
     }
     if (throttled) {
       return makeOAuthProblemReport(
-          OAuthConstants.PROBLEM_CONSUMER_KEY_REFUSED, "exceeded quota exhausted",
+          OAuth.Problems.CONSUMER_KEY_REFUSED, "exceeded quota exhausted",
           HttpResponse.SC_FORBIDDEN);
     }
     if (unauthorized) {
       return makeOAuthProblemReport(
-          OAuthConstants.PROBLEM_PERMISSION_DENIED, "user refused access",
+          OAuth.Problems.PERMISSION_DENIED, "user refused access",
           HttpResponse.SC_BAD_REQUEST);
     }
     if (rejectExtraParams) {
       String extra = hasExtraParams(info.message);
       if (extra != null) {
-        return makeOAuthProblemReport(OAuthConstants.PROBLEM_PARAMETER_REJECTED, extra,
+        return makeOAuthProblemReport(OAuth.Problems.PARAMETER_REJECTED, extra,
             HttpResponse.SC_BAD_REQUEST);
       }
     }
@@ -330,12 +335,12 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
     String requestTokenSecret = Crypto.getRandomString(16);
     String callbackUrl = info.message.getParameter(OAuth.OAUTH_CALLBACK);
     tokenState.put(
-        requestToken, new TokenState(requestTokenSecret, accessor.consumer, callbackUrl));
+        requestToken, new TokenState(requestTokenSecret, callbackUrl));
     List<Parameter> responseParams = OAuth.newList(
         "oauth_token", requestToken,
         "oauth_token_secret", requestTokenSecret);
     if (callbackUrl != null) {
-      responseParams.add(new Parameter(OAuthConstants.OAUTH_CALLBACK_CONFIRMED, "true"));
+      responseParams.add(new Parameter(OAuth.OAUTH_CALLBACK_CONFIRMED, "true"));
     }
     return new HttpResponse(OAuth.formEncode(responseParams));
   }
@@ -513,7 +518,7 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
     state.setUserData(parsed.getQueryParam("user_data"));
     if (state.callbackUrl != null) {
       UriBuilder callback = UriBuilder.parse(state.callbackUrl);
-      callback.addQueryParameter(OAuthConstants.OAUTH_VERIFIER, state.verifier);
+      callback.addQueryParameter(OAuth.OAUTH_VERIFIER, state.verifier);
       return callback.toString();
     }
     return null;
@@ -538,7 +543,7 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
   public TokenPair getPreapprovedToken(String userData) {
     String requestToken = Crypto.getRandomString(16);
     String requestTokenSecret = Crypto.getRandomString(16);
-    TokenState state = new TokenState(requestTokenSecret, oauthConsumer, null);
+    TokenState state = new TokenState(requestTokenSecret, null);
     state.approveToken();
     state.setUserData(userData);
     tokenState.put(requestToken, state);
@@ -571,19 +576,19 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
     String requestToken = info.message.getParameter("oauth_token");
     TokenState state = tokenState.get(requestToken);
     if (throttled) {
-      return makeOAuthProblemReport(OAuthConstants.PROBLEM_CONSUMER_KEY_REFUSED,
+      return makeOAuthProblemReport(OAuth.Problems.CONSUMER_KEY_REFUSED,
           "exceeded quota", HttpResponse.SC_FORBIDDEN);
     } else if (unauthorized) {
-      return makeOAuthProblemReport(OAuthConstants.PROBLEM_PERMISSION_DENIED,
+      return makeOAuthProblemReport(OAuth.Problems.PERMISSION_DENIED,
           "user refused access", HttpResponse.SC_UNAUTHORIZED);
     } else if (state == null) {
-      return makeOAuthProblemReport(OAuthConstants.PROBLEM_TOKEN_REJECTED,
+      return makeOAuthProblemReport(OAuth.Problems.TOKEN_REJECTED,
           "Unknown request token", HttpResponse.SC_UNAUTHORIZED);
     }   
     if (rejectExtraParams) {
       String extra = hasExtraParams(info.message);
       if (extra != null) {
-        return makeOAuthProblemReport(OAuthConstants.PROBLEM_PARAMETER_REJECTED,
+        return makeOAuthProblemReport(OAuth.Problems.PARAMETER_REJECTED,
             extra, HttpResponse.SC_BAD_REQUEST);
       }
     }
@@ -604,7 +609,7 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
       // Verify can refresh
       String sentHandle = info.message.getParameter("oauth_session_handle");
       if (sentHandle == null) {
-        return makeOAuthProblemReport(OAuthConstants.PROBLEM_PARAMETER_ABSENT,
+        return makeOAuthProblemReport(OAuth.Problems.PARAMETER_ABSENT,
             "no oauth_session_handle", HttpResponse.SC_BAD_REQUEST);
       }
       if (!sentHandle.equals(state.sessionHandle)) {
@@ -613,7 +618,7 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
       }
       state.renewToken();
     } else if (state.getState() == State.REVOKED){
-      return makeOAuthProblemReport(OAuthConstants.PROBLEM_TOKEN_REVOKED,
+      return makeOAuthProblemReport(OAuth.Problems.TOKEN_REVOKED,
           "Revoked access token can't be renewed", HttpResponse.SC_UNAUTHORIZED);
     } else {
       throw new Exception("Token in weird state " + state.getState());
@@ -653,18 +658,18 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
     } else if ("container.com".equals(consumerId)) {
       consumer = signedFetchConsumer;
     } else {
-      return makeOAuthProblemReport(OAuthConstants.PROBLEM_PARAMETER_MISSING,
+      return makeOAuthProblemReport(OAuth.Problems.PARAMETER_ABSENT,
           "oauth_consumer_key not found", HttpResponse.SC_BAD_REQUEST);
     }
     OAuthAccessor accessor = new OAuthAccessor(consumer);
     String responseBody = null;
     if (throttled) {
       return makeOAuthProblemReport(
-          OAuthConstants.PROBLEM_CONSUMER_KEY_REFUSED, "exceeded quota", HttpResponse.SC_FORBIDDEN);
+          OAuth.Problems.CONSUMER_KEY_REFUSED, "exceeded quota", HttpResponse.SC_FORBIDDEN);
     }
     if (unauthorized) {
       return makeOAuthProblemReport(
-          OAuthConstants.PROBLEM_PERMISSION_DENIED, "user refused access",
+          OAuth.Problems.PERMISSION_DENIED, "user refused access",
           HttpResponse.SC_UNAUTHORIZED);
     }
     if (consumer == oauthConsumer) {
@@ -673,7 +678,7 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
       TokenState state = tokenState.get(accessToken);
       if (state == null) {
         return makeOAuthProblemReport(
-            OAuthConstants.PROBLEM_TOKEN_REJECTED, "Access token unknown",
+            OAuth.Problems.TOKEN_REJECTED, "Access token unknown",
             HttpResponse.SC_UNAUTHORIZED);
       }
       // Check the signature
@@ -683,7 +688,7 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
 
       if (state.getState() != State.APPROVED) {
         return makeOAuthProblemReport(
-            OAuthConstants.PROBLEM_TOKEN_REVOKED, "User revoked permissions",
+            OAuth.Problems.TOKEN_REVOKED, "User revoked permissions",
             HttpResponse.SC_UNAUTHORIZED);
       }
       if (sessionExtension) {
@@ -721,7 +726,9 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
   
   private void validateMessage(OAuthAccessor accessor, MessageInfo info, boolean tokenEndpoint)
       throws OAuthException, IOException, URISyntaxException {
-    info.message.validateMessage(accessor, new FakeTimeOAuthValidator());
+    OAuthValidator validator = new FakeTimeOAuthValidator();
+    validator.validateMessage(info.message,accessor);
+    
     String bodyHash = info.message.getParameter("oauth_body_hash");
     if (tokenEndpoint && bodyHash != null) {
       throw new RuntimeException("Can't have body hash on token endpoints");
@@ -746,6 +753,18 @@ public class FakeOAuthServiceProvider implements HttpFetcher {
           throw new RuntimeException("oauth_body_hash mismatch");
         }
     }
+    
+    // Most OAuth service providers are much laxer than this about checking nonces (rapidly
+    // changing server-side state scales badly), but we are very strict in test cases.
+    String nonceKey = info.message.getConsumerKey() + ','
+        + info.message.getParameter("oauth_nonce");
+    
+    CachedObject<OAuthMessage> previousMessage = nonceCache.getElement(nonceKey);
+    if (previousMessage != null) {
+      throw new RuntimeException("Reused nonce, old message = " + previousMessage.obj
+          + ", new message " + info.message);
+    }
+    nonceCache.addElement(nonceKey, info.message, TimeUnit.SECONDS.toMillis(10 * 60));
   }
 
   private HttpResponse handleNotFoundUrl(HttpRequest request) throws Exception {
