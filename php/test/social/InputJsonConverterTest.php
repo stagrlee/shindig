@@ -92,7 +92,7 @@ class InputJsonConverterTest extends PHPUnit_Framework_TestCase {
 		"body" : "Click here to review your invitation"
 		}';
     $message = $this->inputJsonConverter->convertMessages($json);
-    file_put_contents('/tmp/message.txt', print_r($json, true));
+    file_put_contents('/tmp/shindig/message.txt', print_r($json, true));
     $this->assertEquals('msgid', $message['id']);
     $this->assertEquals('You have an invitation from Joe', $message['title']);
     $this->assertEquals('Click here to review your invitation', $message['body']);
