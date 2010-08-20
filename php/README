@@ -85,7 +85,7 @@
   -------------
   
   Check out the php/config/container.php file, in local.php you only have 
-  to specify the fields you want to overwrite with other values, for 
+  to specify the fields you want to overwrite with other values, for
   example on a production system you would probably want to have something
   like:
    $shindigConfig = array(
@@ -110,7 +110,7 @@
 
   If you want to run PHP Shindig directly from an svn checkout, please refer to
   the docs/README.svn file to learn about the configuration differences between
-  the released and svn version. 
+  the released and svn version.
 
   Licensing
   ---------

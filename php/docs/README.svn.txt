@@ -4,7 +4,7 @@
   -----------
 
   This file is intended to be a supplement to the general README file, the
-  release version has a slightly different file path configuration 
+  release version has a slightly different file path configuration
   
   Differences between the release version and a svn checkout
   -----------
@@ -12,7 +12,7 @@
   Shindig's svn repository contains both the Java and PHP versions of shindig,
   and the shared javascript and features code.
    
-  To make PHP Shindig work from svn, its default file path configurations in 
+  To make PHP Shindig work from svn, its default file path configurations in
       <shindig>/php/config/container.php
   are all configured for a file path layout where the features and content
   code is contained in a directory level above the php folder
