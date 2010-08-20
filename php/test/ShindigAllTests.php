@@ -19,8 +19,10 @@
  */
 
 /*
- * This file is meant to be run through a php command line or cruiscontrol build, and not called directly
- * through the web browser. To run these tests from the command line:
+ * This file is meant to be run through a php command line or 
+ * cruiscontrol build, and not called directly through the web browser. 
+ *
+ * To run these tests from the command line:
  * # cd /path/to/shindig/php
  * # external/phpunit.php ShindigAllTests test/ShindigAllTests.php
  */
